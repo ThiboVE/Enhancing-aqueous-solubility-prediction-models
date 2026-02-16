@@ -44,7 +44,8 @@ def main():
 
     json_obj = generate_json(inputs)
 
-    with open("data/QuantumFP_input")
+    with open("../data/QuantumFP/QFP_input.json", "w") as f:
+        json.dump(json_obj, f, indent=4)
 
 if __name__ == "__main__":
     main()
