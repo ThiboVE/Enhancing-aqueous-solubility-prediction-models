@@ -1,46 +1,8 @@
-from rdkit.Chem import rdmolops
-from rdkit import RDLogger
-from rdkit import Chem
+from library import preprocess_smiles
 import pandas as pd
 import json
 
 DATA_SOURCE = "../data/AqSolDB/data_curated.csv"
-
-def is_salt(mol: Chem.Mol) -> bool:
-    """
-    Return True if the SMILES is likely a salt.
-    """
-    if mol is None:
-        return False  # Invalid SMILES, treat as non-salt
-    
-    fragments = rdmolops.GetMolFrags(mol, asMols=True)
-    
-    if len(fragments) <= 1:
-        return False  # Only one fragment, likely not a salt
-    
-    return True
-
-def is_atom(mol: Chem.Mol) -> bool:
-    return mol.GetNumHeavyAtoms() == 1
-
-def atom_map_numbers(mol: Chem.Mol) -> str:
-    for atom in mol.GetAtoms():
-        atom.SetAtomMapNum(atom.GetIdx())
-
-    mapped_smiles = Chem.MolToSmiles(mol, canonical=False)
-    return mapped_smiles
-
-def preprocess_smiles(smiles: str) -> str:
-    mol = Chem.MolFromSmiles(smiles)
-
-    if mol is None or is_salt(mol) or is_atom(mol):
-        return None
-    
-    mol_with_H = Chem.AddHs(mol)
-
-    mapped_smiles = atom_map_numbers(mol_with_H)
-    
-    return mapped_smiles
 
 def molecule_repr(id: str, smiles: str) -> dict:
     return {
