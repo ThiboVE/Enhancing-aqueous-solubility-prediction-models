@@ -1,15 +1,68 @@
+from library import preprocess_smiles
+from rdkit import Chem 
 import pytest
 
-@pytest.mark.parametrize(
-    "input_smiles, expected_output",
-    [
-        ("CC", "[C:1]([H:3])([H:4])([H:5])[C:7]([H:6])([H:2])([H:8]"),
-        ("", "[O:1]=[C:2]([c:3]1[c:4]([H:32])[c:5]2[c:6]([H:33])[c:7](-[c:8]3[n:9][n:10][c:11]([C:12]4([H:34])[C:13]([H:35])([H:36])[C:14]4([H:37])[H:38])[s:15]3)[c:16]([H:39])[n:17][n:18]2[c:19]1[H:40])[N:20]1[C:21]([H:41])([H:42])[C:22]([H:43])([H:44])[N:23]([c:24]2[c:25]([H:45])[c:26]([H:46])[n:27][c:28]([H:47])[c:29]2[H:48])[C:30]([H:49])([H:50])[C:31]1([H:51])[H:52]")
-        ("OC(=O)C1=C[NH++]([O-])[CH-]C=C1", None), # Handle this warning: Explicit valence for atom # 5 N, 4, is greater than permitted
-        ("[Na+].C[As](O)([O-])=O", None), # Filter out the salts
-        ("[H+].[Cl-].CNC1(CCCCC1=O)c2ccccc2Cl", None) # Filter out salts + address 'WARNING: not removing hydrogen atom without neighbors'
-    ],
-)
+import pytest
 
-def test_preprocess_smiles_basic(input_smiles, expected_output):
-    assert preprocess_smiles(input_smiles) == expected_output
+@pytest.mark.parametrize("bad_smiles", [
+    "not_a_smiles",
+    "C1CC",      # broken ring
+])
+
+def test_invalid_smiles_filtered(bad_smiles):
+    assert preprocess_smiles(bad_smiles) is None
+
+
+@pytest.mark.parametrize("single_atom", [
+    "C",
+    "[Na+]",
+    "Cl",
+])
+
+def test_single_atom_filtered(single_atom):
+    assert preprocess_smiles(single_atom) is None
+
+
+@pytest.mark.parametrize("salted_smiles", [
+    "CCO.[Na+]",
+    "CCO.Cl",
+    "c1ccccc1.[K+]",
+])
+
+def test_salt_molecules_filtered(salted_smiles):
+    assert preprocess_smiles(salted_smiles) is None
+
+
+@pytest.mark.parametrize("valid_smiles", [
+    "CCO",
+    "c1ccccc1",
+    "O=C(O)C",
+])
+
+def test_valid_smiles_not_filtered(valid_smiles):
+    result = preprocess_smiles(valid_smiles)
+    assert result is not None
+
+
+def test_explicit_hydrogens_added():
+    result = preprocess_smiles("CCO")
+    mol = Chem.MolFromSmiles(result)
+
+    # No implicit hydrogens allowed
+    for atom in mol.GetAtoms():
+        assert atom.GetNumImplicitHs() == 0
+
+
+def test_atom_mapping_added():
+    result = preprocess_smiles("CCO")
+    mol = Chem.MolFromSmiles(result)
+
+    map_nums = [atom.GetAtomMapNum() for atom in mol.GetAtoms()]
+
+    # All atoms mapped
+    assert all(num > 0 for num in map_nums)
+
+    # Mapping unique
+    assert len(map_nums) == len(set(map_nums))
+
+

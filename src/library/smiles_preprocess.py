@@ -22,8 +22,7 @@ def atom_map_numbers(mol: Chem.Mol) -> str:
     for atom in mol.GetAtoms():
         atom.SetAtomMapNum(atom.GetIdx() + 1)
 
-    mapped_smiles = Chem.MolToSmiles(mol, canonical=False)
-    return mapped_smiles
+    return mol
 
 def preprocess_smiles(smiles: str) -> str:
     """
@@ -42,6 +41,7 @@ def preprocess_smiles(smiles: str) -> str:
     
     mol_with_H = Chem.AddHs(mol)
 
-    mapped_smiles = atom_map_numbers(mol_with_H)
+    mapped_mol = atom_map_numbers(mol_with_H)
     
+    mapped_smiles = Chem.MolToSmiles(mapped_mol, canonical=True)
     return mapped_smiles
