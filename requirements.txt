@@ -2,3 +2,7 @@ numpy>=1.26,<2.0
 pandas>=2.2,<3.0
 matplotlib>=3.8,<4.0
 scikit-learn>=1.4,<2.0
+rdkit>=2025.9.3
+ipykernel==6.27.0
+jupyterlab==4.5.1
+pytest==8.1.1
