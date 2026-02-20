@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools", "setuptools_scm", "cython"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ml-enhance"
+description = "Investigating potential ML enhancements using QM descriptors."
+dynamic = ["version"]
+dependencies = [
+    "numpy>=2.2.4",
+    "rdkit>=2025.9.1",
+    "scikit-learn>=1.8.0",
+    "pandas>=3.0.1",
+]
+
+[project.optional-dependencies]
+testing = [
+    "pytest"
+]
+notebook = [
+    "ipykernel",
+    "jupyterlab",
+]
+linting = [
+    "ruff",
+    "pre-commit",
+]
+
+[project.scripts]
+
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [ "ml_enhance" ]
+
+[tool.setuptools_scm]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks slow tests (deselect with '-m \"not slow\"')",
+]

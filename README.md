@@ -20,5 +20,6 @@ To access the code used in this project follow the next steps:
 I have used a UV virtual environment, so make sure UV is installed.
 
 1. Activate the UV environment, in terminal: `.venv\Scripts\activate`
-2. Install the packages in `requirements.txt` with `uv pip install -r requirements.txt`
-3. install my custom (local) package with `uv pip install -e src/`
+2. Install my custom (local) package with `uv pip install -e .`
+   1. All optional dependencies can be installed with `uv pip install -e ".[testing,notebook,linting]"
+`
