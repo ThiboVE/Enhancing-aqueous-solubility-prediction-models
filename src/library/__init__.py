@@ -4,3 +4,5 @@ from library.smiles_preprocess import (
     is_salt,
     is_atom,
 )
+
+from library.general_functions import parallelize
