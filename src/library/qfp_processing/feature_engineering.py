@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 
@@ -55,6 +56,58 @@ class QFPFeatureEngineer:
         return df
 
     def _aggregate_ir_regions(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Aggregate IR frequencies and intensities into defined regions:
+        - <1500
+        - 1500-2750
+        - 2750-4000
+        """
+
+        new_features_list = []
+
+        bins = [0, 1500, 2750, 4000]
+        freq_labels = ["1500", "1500_2750", "2750_4000"]
+
+        for freqs, intensities in zip(
+            df["normal_mode_frequencies"], df["infrared_intensity"]
+        ):
+            freqs = np.array(freqs)
+            intensities = np.array(intensities)
+
+            # Keep only physical frequencies (TODO: maybe take imaginary freqs into account)
+            mask = (freqs >= 0) & (freqs <= 4000)
+            freqs = freqs[mask]
+            intensities = intensities[mask]
+
+            # Assign each frequency to a bin
+            bin_indices = np.digitize(freqs, bins)
+
+            feature_dict = {}
+
+            for i, label in enumerate(freq_labels, start=1):
+                idxs = np.where(bin_indices == i)[0]
+
+                feature_dict[f"avg_ir_freq_{label}"] = (
+                    freqs[idxs].mean() if len(idxs) > 0 else np.nan
+                )
+                feature_dict[f"avg_ir_intensity_{label}"] = (
+                    intensities[idxs].mean() if len(idxs) > 0 else np.nan
+                )
+
+            new_features_list.append(feature_dict)
+
+        new_features = pd.DataFrame(new_features_list).astype("Float64")
+
+        # Concatenate with original dataframe
+        df = pd.concat([df.reset_index(drop=True), new_features], axis=1)
+
+        # Drop raw IR columns
+        df = df.drop(
+            ["infrared_intensity", "normal_mode_frequencies", "normal_modes"],
+            axis=1,
+            errors="ignore",
+        )
+
         return df
 
     def _aggregate_atomic_features(self, df: pd.DataFrame) -> pd.DataFrame:
