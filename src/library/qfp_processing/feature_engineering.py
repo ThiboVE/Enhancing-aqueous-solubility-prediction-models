@@ -38,9 +38,9 @@ class QFPFeatureEngineer:
             return None
 
         for feature in thermodynamic_features:
-            df[f'{feature}_{int(self.temperature)}K'] = df[feature].apply(get_val_at_T)
+            df[f'{feature}_{int(self.temperature)}K'] = df[feature].apply(get_val_at_T).astype("Float64")
 
-        df.drop(thermodynamic_features)
+        df = df.drop(thermodynamic_features, axis='columns')
 
         return df
 
@@ -48,6 +48,9 @@ class QFPFeatureEngineer:
         return df
 
     def _aggregate_atomic_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Naive approach of just taking the average, later we can look into deviding per atom type
+        """
         return df
 
     def _aggregate_bond_features(self, df: pd.DataFrame) -> pd.DataFrame:
