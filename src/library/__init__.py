@@ -6,3 +6,10 @@ from library.smiles_preprocess import (
 )
 
 from library.general_functions import parallelize
+
+from library.qfp_processing import (
+    QFPFeatureEngineer,
+    QuantumFPFileLoader,
+    ConformerAggregator,
+    QuantumFPDatasetBuilder
+)
