@@ -74,7 +74,7 @@ class QFPFeatureEngineer:
             freqs = np.array(freqs)
             intensities = np.array(intensities)
 
-            # Keep only physical frequencies (TODO: maybe take imaginary freqs into account)
+            # Keep only physical frequencies (TODO: maybe take imaginary freqs into account one way or another)
             mask = (freqs >= 0) & (freqs <= 4000)
             freqs = freqs[mask]
             intensities = intensities[mask]
@@ -114,6 +114,37 @@ class QFPFeatureEngineer:
         """
         Naive approach of just taking the average, later we can look into deviding per atom type
         """
+
+        atomic_features = {
+            "effective_coordination_number",
+            "partial_charge",
+            "atomic_fukui_minus",
+            "atomic_fukui_plus",
+            "atomic_dipole_norm",
+            "atomic_quadrupole_principal_invariant_2",
+            "atomic_quadrupole_principal_invariant_3",
+            "atomic_polarizability_mean",
+            "atomic_polarizability_anisotropy",
+            "percentage_buried_volume",
+            "atomic_sasa",
+            "partial_charge_water",
+            "partial_charge_thf",
+            "partial_charge_cyclohexane",
+            "partial_charge_dmso",
+        }
+
+        def get_mean(atomic_feature):
+            return np.array([x[1] for x in atomic_feature]).mean()
+
+        for feature in atomic_features:
+            df[f"avg_{feature}"] = df[feature].apply(get_mean).astype("Float64")
+
+        df = df.drop(
+            atomic_features,
+            axis=1,
+            errors="ignore",
+        )
+
         return df
 
     def _aggregate_bond_features(self, df: pd.DataFrame) -> pd.DataFrame:
