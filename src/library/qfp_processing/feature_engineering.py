@@ -19,7 +19,7 @@ class QFPFeatureEngineer:
         df = self._select_thermodynamic_features(df)
         df = self._aggregate_ir_regions(df)
         df = self._aggregate_atomic_features(df)
-        df = self._aggregate_bond_features(df)
+        df = self._aggregate_interaction_features(df)
 
         return df
 
@@ -33,7 +33,7 @@ class QFPFeatureEngineer:
             "atomic_polarizability",
         ]
 
-        df = df.drop(features_to_remove, axis="columns")
+        df = df.drop(features_to_remove, axis=1, errors="ignore")
 
         return df
 
@@ -51,7 +51,7 @@ class QFPFeatureEngineer:
                 df[feature].apply(get_val_at_T).astype("Float64")
             )
 
-        df = df.drop(thermodynamic_features, axis="columns")
+        df = df.drop(thermodynamic_features, axis=1, errors="ignore")
 
         return df
 
@@ -147,5 +147,29 @@ class QFPFeatureEngineer:
 
         return df
 
-    def _aggregate_bond_features(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _aggregate_interaction_features(self, df: pd.DataFrame) -> pd.DataFrame:
+
+        interaction_features = {
+            "bond_energy",
+            "bond_length",
+            "bond_stiffness",
+            "overlap_integral",
+            "nuclear_repulsion",
+            "atomic_charge_dipole_interaction",
+            "atomic_charge_quadrupole_interaction",
+            "atomic_dipole_dipole_interaction",
+        }
+
+        def get_mean(interaction_feature):
+            return np.array([x[2] for x in interaction_feature]).mean()
+
+        for feature in interaction_features:
+            df[f"avg_{feature}"] = df[feature].apply(get_mean).astype("Float64")
+
+        df = df.drop(
+            interaction_features,
+            axis=1,
+            errors="ignore",
+        )
+
         return df
