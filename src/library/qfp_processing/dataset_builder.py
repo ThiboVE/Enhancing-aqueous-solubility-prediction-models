@@ -1,12 +1,14 @@
 from pathlib import Path
 from typing import Generator
+
 import pandas as pd
 
-from library.qfp_processing.file_loader import QuantumFPFileLoader
-from library.qfp_processing.feature_engineering import QFPFeatureEngineer
 from library.qfp_processing.aggregation import ConformerAggregator
+from library.qfp_processing.feature_engineering import QFPFeatureEngineer
+from library.qfp_processing.file_loader import QuantumFPFileLoader
 
 # TODO: add a function to save the final dataset to disk (add intermediate save point every 1000 molecules or something)
+
 
 class QuantumFPDatasetBuilder:
     """
@@ -31,9 +33,7 @@ class QuantumFPDatasetBuilder:
         molecule_rows: list[pd.Series] = []
 
         for file in self.loader.list_output_files():
-
             for df in self.loader.stream_conformer_dataframe(file):
-
                 df = self.engineer.clean_features(df)
 
                 mol_features: pd.Series = self.aggregator.thermal_average(df)
@@ -49,7 +49,6 @@ class QuantumFPDatasetBuilder:
         """
 
         for file in self.loader.list_output_files():
-
             for df in self.loader.stream_conformer_dataframe(file):
                 if clean:
                     df = self.engineer.clean_features(df)
