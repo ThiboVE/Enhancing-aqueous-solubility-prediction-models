@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -92,9 +93,13 @@ def mock_dataframe():
     )
 
 
+# ------------------------------------------------------------
+# Tensor removal
+# ------------------------------------------------------------
 def test_remove_tensor_features(mock_dataframe):
     engineer = QFPFeatureEngineer(temperature=300)
     df_clean = engineer._remove_tensor_features(mock_dataframe)
+
     for col in [
         "molecular_dipole",
         "molecular_quadrupole",
@@ -106,41 +111,99 @@ def test_remove_tensor_features(mock_dataframe):
         assert col not in df_clean.columns
 
 
+# ------------------------------------------------------------
+# Thermodynamic selection
+# ------------------------------------------------------------
 def test_select_thermodynamic_features(mock_dataframe):
     engineer = QFPFeatureEngineer(temperature=300)
     df_out = engineer._select_thermodynamic_features(mock_dataframe)
+
+    # Check new columns exist
     for feature in ["gibbs_free_energy", "entropy", "heat_capacity"]:
         col_name = f"{feature}_300K"
         assert col_name in df_out.columns
+
+    # Check computed values match mock data
     assert df_out.loc[0, "gibbs_free_energy_300K"] == -12
+    assert df_out.loc[1, "gibbs_free_energy_300K"] == -11
+    assert df_out.loc[0, "entropy_300K"] == 55
+    assert df_out.loc[1, "entropy_300K"] == 57
+    assert df_out.loc[0, "heat_capacity_300K"] == 11
+    assert df_out.loc[1, "heat_capacity_300K"] == 11.5
 
 
+# ------------------------------------------------------------
+# IR aggregation
+# ------------------------------------------------------------
 def test_aggregate_ir_regions(mock_dataframe):
     engineer = QFPFeatureEngineer(temperature=300)
-    result = engineer._aggregate_ir_regions(mock_dataframe)
-    for col in [
-        "avg_ir_freq_1500",
-        "avg_ir_intensity_1500",
-        "avg_ir_freq_1500_2750",
-        "avg_ir_intensity_1500_2750",
-        "avg_ir_freq_2750_4000",
-        "avg_ir_intensity_2750_4000",
-    ]:
-        assert col in result.columns
-    assert "normal_mode_frequencies" not in result.columns
+    df_out = engineer._aggregate_ir_regions(mock_dataframe)
+
+    # Expected means for first row
+    freqs = np.array([500, 1000, 2000, 3000])
+    intensities = np.array([1.0, 2.0, 3.0, 4.0])
+
+    assert df_out.loc[0, "avg_ir_freq_1500"] == pytest.approx(
+        np.mean(freqs[freqs < 1500])
+    )
+    assert df_out.loc[0, "avg_ir_intensity_1500"] == pytest.approx(
+        np.mean(intensities[freqs < 1500])
+    )
+    assert df_out.loc[0, "avg_ir_freq_1500_2750"] == pytest.approx(
+        np.mean(freqs[(freqs >= 1500) & (freqs < 2750)])
+    )
+    assert df_out.loc[0, "avg_ir_intensity_1500_2750"] == pytest.approx(
+        np.mean(intensities[(freqs >= 1500) & (freqs < 2750)])
+    )
+    assert df_out.loc[0, "avg_ir_freq_2750_4000"] == pytest.approx(
+        np.mean(freqs[freqs >= 2750])
+    )
+    assert df_out.loc[0, "avg_ir_intensity_2750_4000"] == pytest.approx(
+        np.mean(intensities[freqs >= 2750])
+    )
+
+    # Raw columns removed
+    for col in ["normal_mode_frequencies", "infrared_intensity", "normal_modes"]:
+        assert col not in df_out.columns
 
 
+# ------------------------------------------------------------
+# Atomic aggregation
+# ------------------------------------------------------------
 def test_aggregate_atomic_features(mock_dataframe):
     engineer = QFPFeatureEngineer(temperature=300)
-    result = engineer._aggregate_atomic_features(mock_dataframe)
-    for col in ["avg_effective_coordination_number", "avg_partial_charge"]:
-        assert col in result.columns
-    assert "partial_charge" not in result.columns
+    df_out = engineer._aggregate_atomic_features(mock_dataframe)
+
+    # Compute expected averages manually for first row
+    expected_avg_effective_coordination_number = np.mean([2.0, 1.0])
+    expected_avg_partial_charge = np.mean([-0.2, 0.1])
+
+    assert df_out.loc[0, "avg_effective_coordination_number"] == pytest.approx(
+        expected_avg_effective_coordination_number
+    )
+    assert df_out.loc[0, "avg_partial_charge"] == pytest.approx(
+        expected_avg_partial_charge
+    )
+
+    # Original columns removed
+    for col in ["effective_coordination_number", "partial_charge"]:
+        assert col not in df_out.columns
 
 
+# ------------------------------------------------------------
+# Interaction aggregation
+# ------------------------------------------------------------
 def test_aggregate_interaction_features(mock_dataframe):
     engineer = QFPFeatureEngineer(temperature=300)
-    result = engineer._aggregate_interaction_features(mock_dataframe)
-    for col in ["avg_bond_energy", "avg_bond_length"]:
-        assert col in result.columns
-    assert "bond_energy" not in result.columns
+    df_out = engineer._aggregate_interaction_features(mock_dataframe)
+
+    # Expected average for first row
+    expected_avg_bond_energy = np.mean([10.0, 20.0])
+    expected_avg_bond_length = np.mean([1.0, 2.0])
+
+    assert df_out.loc[0, "avg_bond_energy"] == pytest.approx(expected_avg_bond_energy)
+    assert df_out.loc[0, "avg_bond_length"] == pytest.approx(expected_avg_bond_length)
+
+    # Original columns removed
+    for col in ["bond_energy", "bond_length"]:
+        assert col not in df_out.columns
