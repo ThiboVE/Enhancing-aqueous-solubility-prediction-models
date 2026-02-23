@@ -74,7 +74,7 @@ class QFPFeatureEngineer:
             freqs = np.array(freqs)
             intensities = np.array(intensities)
 
-            # Keep only physical frequencies (TODO: maybe take imaginary freqs into account one way or another)
+            # Keep only physical frequencies (MARK: TODO: maybe take imaginary freqs into account one way or another)
             mask = (freqs >= 0) & (freqs <= 4000)
             freqs = freqs[mask]
             intensities = intensities[mask]
@@ -114,6 +114,7 @@ class QFPFeatureEngineer:
         """
         Naive approach of just taking the average, later we can look into deviding per atom type
         """
+        # MARK: TODO: split into atom types and average for each type
 
         atomic_features = {
             "effective_coordination_number",
