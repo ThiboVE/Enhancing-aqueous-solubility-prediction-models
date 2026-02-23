@@ -5,6 +5,7 @@ class QFPFeatureEngineer:
     """
     Handles conformer-level feature processing.
     """
+
     def __init__(self, temperature: float):
         self.temperature = temperature
 
@@ -22,9 +23,16 @@ class QFPFeatureEngineer:
         return df
 
     def _remove_tensor_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        features_to_remove = ["molecular_dipole", "molecular_quadrupole", "molecular_polarizability", "atomic_dipole", "atomic_quadrupole", "atomic_polarizability"]
+        features_to_remove = [
+            "molecular_dipole",
+            "molecular_quadrupole",
+            "molecular_polarizability",
+            "atomic_dipole",
+            "atomic_quadrupole",
+            "atomic_polarizability",
+        ]
 
-        df = df.drop(features_to_remove, axis='columns')
+        df = df.drop(features_to_remove, axis="columns")
 
         return df
 
@@ -38,9 +46,11 @@ class QFPFeatureEngineer:
             return None
 
         for feature in thermodynamic_features:
-            df[f'{feature}_{int(self.temperature)}K'] = df[feature].apply(get_val_at_T).astype("Float64")
+            df[f"{feature}_{int(self.temperature)}K"] = (
+                df[feature].apply(get_val_at_T).astype("Float64")
+            )
 
-        df = df.drop(thermodynamic_features, axis='columns')
+        df = df.drop(thermodynamic_features, axis="columns")
 
         return df
 
