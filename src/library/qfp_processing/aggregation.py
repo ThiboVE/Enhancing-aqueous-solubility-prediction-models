@@ -18,8 +18,8 @@ class ConformerAggregator:
     def thermal_average(self, df: pd.DataFrame) -> pd.Series:
         # Extract free energies and compute Boltzmann weights
         G = df["gibbs_free_energy_300K"].to_numpy()
-        boltz_factors = np.exp(-G / (self.k_B * self.temperature))
-        weights = boltz_factors / boltz_factors.sum()
+        boltzmann_factors = np.exp(-G / (self.k_B * self.temperature))
+        weights = boltzmann_factors / boltzmann_factors.sum()
 
         # Prepare the result dictionary, start with SMILES
         result = {"smiles": df["original_smiles"].iloc[0]}
