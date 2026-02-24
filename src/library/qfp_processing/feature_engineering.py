@@ -87,11 +87,15 @@ class QFPFeatureEngineer:
             for i, label in enumerate(freq_labels, start=1):
                 idxs = np.where(bin_indices == i)[0]
 
-                feature_dict[f"avg_ir_freq_{label}"] = (
-                    freqs[idxs].mean() if len(idxs) > 0 else np.nan
+                feature_dict[f"ir_centroid_freq_{label}"] = (
+                    (np.dot(freqs[idxs], intensities[idxs]) / intensities.sum())
+                    if len(idxs) > 0
+                    else 0  # region centroid frequency: v_k,R = \frac{\sum_{i \in R} v_k,i I_k,i}{\sum_{i \in R} v_k,i}
                 )
-                feature_dict[f"avg_ir_intensity_{label}"] = (
-                    intensities[idxs].mean() if len(idxs) > 0 else np.nan
+                feature_dict[f"ir_norm_intensity_{label}"] = (
+                    (intensities[idxs].sum() / intensities.sum())
+                    if len(idxs) > 0
+                    else 0  # I_k,R = \frac{\sum_{i \in R} I_k,i}{\sum_{i \in all} I_k,i}
                 )
 
             new_features_list.append(feature_dict)

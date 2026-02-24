@@ -17,13 +17,13 @@ class QuantumFPDatasetBuilder:
     """
 
     def __init__(
-        self,
-        output_path: Path,
-        temperature: float = 300.0,
+        self, output_path: Path, temperature: float = 300.0, cap: int | None = None
     ) -> None:
         self.loader = QuantumFPFileLoader(output_path)
         self.engineer = QFPFeatureEngineer(temperature)
         self.aggregator = ConformerAggregator(temperature)
+
+        self.cap = cap
 
     def build_dataset(self) -> pd.DataFrame:
         """
@@ -32,7 +32,12 @@ class QuantumFPDatasetBuilder:
 
         molecule_rows: list[pd.Series] = []
 
-        for file in self.loader.list_output_files():
+        output_files = self.loader.list_output_files()
+        output_files = (
+            output_files[: self.cap] if self.cap is not None else output_files
+        )
+
+        for file in output_files:
             for df in self.loader.stream_conformer_dataframe(file):
                 df = self.engineer.clean_features(df)
 
