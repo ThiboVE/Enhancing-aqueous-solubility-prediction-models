@@ -4,6 +4,10 @@
         "max_microstates": 8,
         "metadynamics": false
     },
+    "runtime_options": {
+        "num_vcpus": 1,
+        "batch_size": 5
+    },
     "inputs": [
         {
             "id": 0,

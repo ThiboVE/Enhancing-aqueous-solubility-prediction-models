@@ -1,0 +1,32 @@
+import numpy as np
+import pandas as pd
+from scipy.constants import (
+    Avogadro,  # 1/mol
+    Boltzmann,  # in J/K
+)
+
+
+class ConformerAggregator:
+    """
+    Aggregates conformer-level features to molecule-level features.
+    """
+
+    def __init__(self, temperature: float = 300.0) -> None:
+        self.temperature = temperature
+        self.k_B: float = Boltzmann * Avogadro * 0.000239005736  # kcal/mol K
+
+    def thermal_average(self, df: pd.DataFrame) -> pd.Series:
+        # Extract free energies and compute Boltzmann weights
+        G = df["gibbs_free_energy_300K"].to_numpy()
+        boltzmann_factors = np.exp(-G / (self.k_B * self.temperature))
+        weights = boltzmann_factors / boltzmann_factors.sum()
+
+        # Prepare the result dictionary, start with SMILES
+        result = {"smiles": df["original_smiles"].iloc[0]}
+
+        # Loop over all float columns and compute weighted average
+        float_cols = df.select_dtypes(include="float64").columns
+        for col in float_cols:
+            result[col] = np.dot(weights, df[col].to_numpy())
+
+        return pd.Series(result)
