@@ -88,14 +88,10 @@ class QFPFeatureEngineer:
                 idxs = np.where(bin_indices == i)[0]
 
                 feature_dict[f"ir_centroid_freq_{label}"] = (
-                    (np.dot(freqs[idxs], intensities[idxs]) / intensities.sum())
-                    if len(idxs) > 0
-                    else 0  # region centroid frequency: v_k,R = \frac{\sum_{i \in R} v_k,i I_k,i}{\sum_{i \in R} v_k,i}
+                    centroid_freq(freqs, intensities, idxs) if len(idxs) > 0 else 0
                 )
                 feature_dict[f"ir_norm_intensity_{label}"] = (
-                    (intensities[idxs].sum() / intensities.sum())
-                    if len(idxs) > 0
-                    else 0  # I_k,R = \frac{\sum_{i \in R} I_k,i}{\sum_{i \in all} I_k,i}
+                    norm_intensity(intensities, idxs) if len(idxs) > 0 else 0
                 )
 
             new_features_list.append(feature_dict)
@@ -178,3 +174,17 @@ class QFPFeatureEngineer:
         )
 
         return df
+
+
+def centroid_freq(freqs, intensities, mask):
+    """
+    region centroid frequency for a region: v_k,R = \frac{\sum_{i \in R} v_k,i I_k,i}{\sum_{i \in R} v_k,i}
+    """
+    return np.dot(freqs[mask], intensities[mask]) / intensities[mask].sum()
+
+
+def norm_intensity(intensities, mask):
+    """
+    normalized intensity for a region: I_k,R = \frac{\sum_{i \in R} I_k,i}{\sum_{i \in all} I_k,i}
+    """
+    return intensities[mask].sum() / intensities.sum()

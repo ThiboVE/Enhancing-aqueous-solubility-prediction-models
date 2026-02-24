@@ -143,23 +143,29 @@ def test_aggregate_ir_regions(mock_dataframe):
     freqs = np.array([500, 1000, 2000, 3000])
     intensities = np.array([1.0, 2.0, 3.0, 4.0])
 
-    assert df_out.loc[0, "avg_ir_freq_1500"] == pytest.approx(
-        np.mean(freqs[freqs < 1500])
+    def centroid_freq(mask):
+        return np.dot(freqs[mask], intensities[mask]) / intensities[mask].sum()
+
+    def norm_intensity(mask):
+        return intensities[mask].sum() / intensities.sum()
+
+    assert df_out.loc[0, "ir_centroid_freq_1500"] == pytest.approx(
+        2500 / 3  # centroid_freq(freqs < 1500)
     )
-    assert df_out.loc[0, "avg_ir_intensity_1500"] == pytest.approx(
-        np.mean(intensities[freqs < 1500])
+    assert df_out.loc[0, "ir_norm_intensity_1500"] == pytest.approx(
+        0.3  # norm_intensity(freqs < 1500)
     )
-    assert df_out.loc[0, "avg_ir_freq_1500_2750"] == pytest.approx(
-        np.mean(freqs[(freqs >= 1500) & (freqs < 2750)])
+    assert df_out.loc[0, "ir_centroid_freq_1500_2750"] == pytest.approx(
+        2000  # centroid_freq((freqs >= 1500) & (freqs < 2750))
     )
-    assert df_out.loc[0, "avg_ir_intensity_1500_2750"] == pytest.approx(
-        np.mean(intensities[(freqs >= 1500) & (freqs < 2750)])
+    assert df_out.loc[0, "ir_norm_intensity_1500_2750"] == pytest.approx(
+        0.3  # norm_intensity((freqs >= 1500) & (freqs < 2750))
     )
-    assert df_out.loc[0, "avg_ir_freq_2750_4000"] == pytest.approx(
-        np.mean(freqs[freqs >= 2750])
+    assert df_out.loc[0, "ir_centroid_freq_2750_4000"] == pytest.approx(
+        3000  # centroid_freq(freqs >= 2750)
     )
-    assert df_out.loc[0, "avg_ir_intensity_2750_4000"] == pytest.approx(
-        np.mean(intensities[freqs >= 2750])
+    assert df_out.loc[0, "ir_norm_intensity_2750_4000"] == pytest.approx(
+        0.4  # norm_intensity(freqs >= 2750)
     )
 
     # Raw columns removed
