@@ -3,6 +3,7 @@ from typing import Generator
 
 import pandas as pd
 
+from library.general_functions import parallelize
 from library.qfp_processing.aggregation import ConformerAggregator
 from library.qfp_processing.feature_engineering import QFPFeatureEngineer
 from library.qfp_processing.file_loader import QuantumFPFileLoader
@@ -16,42 +17,52 @@ class QuantumFPDatasetBuilder:
     conformer aggregation, and dataset assembly.
     """
 
-    def __init__(
-        self, output_path: Path, temperature: float = 300.0, cap: int | None = None
-    ) -> None:
+    def __init__(self, output_path: Path, temperature: float = 300.0) -> None:
         self.loader = QuantumFPFileLoader(output_path)
         self.engineer = QFPFeatureEngineer(temperature)
         self.aggregator = ConformerAggregator(temperature)
 
-        self.cap = cap
+    def build_single_molecule(self, file: Path) -> pd.Series | None:
+        try:
+            for df in self.loader.stream_conformer_dataframe(file):
+                df = self.engineer.clean_features(df)
 
-    def build_dataset(self) -> pd.DataFrame:
+                mol_features: pd.Series = self.aggregator.thermal_average(df)
+
+            return mol_features
+
+        except Exception as e:
+            print(f"Error '{e}' occured for {file}")
+            return None
+
+    def build_dataset(
+        self, cap: int | None = None, multiprocess: bool = False, n_jobs: int = 4
+    ) -> tuple[pd.DataFrame, list[Path]]:
         """
         Stream-process all molecules and assemble final dataset.
         """
 
         molecule_rows: list[pd.Series] = []
+        error_files: list[Path] = []
 
         output_files = self.loader.list_output_files()
-        output_files = (
-            output_files[: self.cap] if self.cap is not None else output_files
+        output_files = output_files[:cap] if cap is not None else output_files
+
+        results = (
+            parallelize(self.build_single_molecule, output_files, n_jobs=n_jobs)
+            if multiprocess
+            else [self.build_single_molecule(file) for file in output_files]
         )
 
-        for file in output_files:
-            try:
-                for df in self.loader.stream_conformer_dataframe(file):
-                    df = self.engineer.clean_features(df)
+        for idx, result in enumerate(results):
+            if result is None:
+                error_files.append(output_files[idx])
+            else:
+                molecule_rows.append(result)
 
-                    mol_features: pd.Series = self.aggregator.thermal_average(df)
+        return pd.DataFrame(molecule_rows), error_files
 
-                    molecule_rows.append(mol_features)
-
-            except Exception as e:
-                print(f"Error '{e}' occured for {file}")
-
-        return pd.DataFrame(molecule_rows)
-
-    def stream_dataset(self, clean=True) -> Generator[pd.Series, None, None]:
+    def _stream_dataset(self, clean=True) -> Generator[pd.Series, None, None]:
         """
         Fully streaming version.
         Yields one molecule-level row at a time.
