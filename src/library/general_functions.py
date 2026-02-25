@@ -2,11 +2,12 @@ from _collections_abc import Callable, Iterable
 from typing import Any
 
 from joblib import Parallel, delayed
+from tqdm import tqdm
 
 
 def parallelize(
     func: Callable[[Any], Any], iterable: Iterable[Any], n_jobs=4, backend="loky"
 ) -> list[Any]:
     return Parallel(n_jobs=n_jobs, backend=backend)(
-        delayed(func)(item) for item in iterable
+        delayed(func)(item) for item in tqdm(iterable)
     )

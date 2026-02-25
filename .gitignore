@@ -1,3 +1,4 @@
 *.pyc
 data/QuantumFP/QFP_output/*
-data/QuantumFP/QFP_output1/*
+data/QuantumFP/corrupted/*
+data/QuantumFP/redownload_corrupted/*

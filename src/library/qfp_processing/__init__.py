@@ -6,3 +6,4 @@ from library.qfp_processing.feature_engineering import (
     norm_intensity,
 )
 from library.qfp_processing.file_loader import QuantumFPFileLoader
+from library.qfp_processing.rdkit_feature_calculator import RDKitFeatureCalculator
