@@ -17,8 +17,8 @@ class QuantumFPDatasetBuilder:
     conformer aggregation, and dataset assembly.
     """
 
-    def __init__(self, output_path: Path, temperature: float = 300.0) -> None:
-        self.loader = QuantumFPFileLoader(output_path)
+    def __init__(self, data_directory: Path, temperature: float = 300.0) -> None:
+        self.loader = QuantumFPFileLoader(data_directory)
         self.engineer = QFPFeatureEngineer(temperature)
         self.aggregator = ConformerAggregator(temperature)
 

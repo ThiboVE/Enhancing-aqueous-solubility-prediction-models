@@ -77,17 +77,19 @@ class QuantumFPFileLoader:
 
     def __init__(
         self,
-        output_path: Path,
+        data_directory: Path,
         property_dict: dict[int, str] = PROPERTY_DICT,
     ) -> None:
-        self.output_path = Path(output_path)
+        self.data_directory = Path(data_directory)
         self.property_dict = property_dict
 
     def list_output_files(self, extension: str = ".gz") -> list[Path]:
         """
         Return all output files with the given extension.
         """
-        return [path for path in self.output_path.iterdir() if path.suffix == extension]
+        return [
+            path for path in self.data_directory.iterdir() if path.suffix == extension
+        ]
 
     def stream_conformer_dataframe(
         self,
