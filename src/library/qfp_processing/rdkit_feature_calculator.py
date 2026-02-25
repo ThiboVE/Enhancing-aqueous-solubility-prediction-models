@@ -25,12 +25,17 @@ class RDKitFeatureCalculator:
         """
         smiles_list = df[self.smiles_column]
 
-        props = []
+        feature_list = []
         for smiles in smiles_list:
             mol = Chem.MolFromSmiles(smiles)
-            props.append(self.calculator.CalcDescriptors(mol))
 
-        return pd.DataFrame(props, columns=self.descriptor_names)
+            if mol is None:
+                print(f"SMILES: {smiles} is invalid, features are assigned 'None'.")
+                feature_list.append([None] * 217)
+            else:
+                feature_list.append(self.calculator.CalcDescriptors(mol))
+
+        return pd.DataFrame(feature_list, columns=self.descriptor_names)
 
     def add_to_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         """
