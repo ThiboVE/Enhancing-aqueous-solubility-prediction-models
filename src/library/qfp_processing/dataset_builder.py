@@ -38,12 +38,16 @@ class QuantumFPDatasetBuilder:
         )
 
         for file in output_files:
-            for df in self.loader.stream_conformer_dataframe(file):
-                df = self.engineer.clean_features(df)
+            try:
+                for df in self.loader.stream_conformer_dataframe(file):
+                    df = self.engineer.clean_features(df)
 
-                mol_features: pd.Series = self.aggregator.thermal_average(df)
+                    mol_features: pd.Series = self.aggregator.thermal_average(df)
 
-                molecule_rows.append(mol_features)
+                    molecule_rows.append(mol_features)
+
+            except Exception as e:
+                print(f"Error '{e}' occured for {file}")
 
         return pd.DataFrame(molecule_rows)
 
