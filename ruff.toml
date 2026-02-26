@@ -1,0 +1,106 @@
+target-version = "py312"
+line-length = 120
+
+[lint]
+exclude = ["*.ipynb"]
+select = [
+    ### For these consider add noqa
+    "N", # Naming convention
+    "D",  # documentation related
+    "ANN", # annotation related
+    "PLR", # Pylint refactor flags
+    "C90", # Mccabe complexity
+    "SLF",  # access of private members
+    "TRY", # suboptimalities in error handling. Some might be not easy to fix without refactoring.
+    "FBT", # Hard to enforce fully in old repos. Will add a lot of noqa's. But enforcing this in new code is beneficial
+    ###
+    "I", # isort
+    "E",
+    "W",
+    "F",
+    "PTH", # Related to proper pathlib usage
+    "RUF",
+    "ERA", # Do not allow commented code
+    "PERF", # related to performance (micro-optimizations)
+    "BLE", # Blind except
+    "ISC", # string concatenation
+    "G", # Logging statements
+    "SIM", # simplify statements
+    "NPY", # numpy related
+    "B", # Collection of "popular" bugs
+    "PLW", # pylint warning
+    "PLE", # pylint error
+    "PLC", # pylint convention
+    "ARG", # Unused arguments
+    "INP", # warn for implicit namespace packages
+    "EXE", # Related to shebangs and executable python files
+    "S", # Safety checkers
+    "PT", # pytest related
+    "A", # shadowing of builtins
+    "PYI", # related to typehinting
+    "EM", # good practice related to error messaging
+    "T", # print statement are discouraged. Use logging. Use noqa when the print is used for something necessary that is not logging.
+    "UP", # recommended syntax changes for new python versions
+    "RET", # Regarding return values
+    "ICN", # import aliasing
+    "C4", # comprehensions
+    "DTZ", # related to datetime
+    "ASYNC", # Async related
+    "PD", # pandas related
+    "SLOT", # regarding __slots__
+    "LOG", # For logging
+     # misc
+    "Q",
+    "TCH",
+    "COM",
+    "PGH",
+    "PIE",
+    "FURB",
+    "TID",
+    "RSE",
+    "FLY",
+    "AIR",
+    "YTT",
+    "DJ",
+    "FA",
+    "INT",
+]
+
+ignore = [
+    "TRY003", # Allow raising exceptions with long messages outside the class
+    "N802", "N803", "N806", "N815", # For scientific naming, for nonscientific packages this line might be "unignored"
+    "D102", "D103", "D105", "D106", "D107", # public methods and functions do not require a docstring
+    "S101", # allow asserts
+    "S603", # allow nonliteral subprocess calls
+    "S607", # allow subprocess calls with partial paths
+    "FIX", # Allow fixme etc
+    "TD", # Is regarding formatting of TODO
+    # rules conflicting with `ruff format`
+    "E501",
+    "W191",
+    "E111",
+    "E114",
+    "E117",
+    "D206",
+    "D300",
+    "Q000",
+    "Q001",
+    "Q002",
+    "Q003",
+    "COM812",
+    "COM819",
+    "ISC001",
+    "ISC002",
+]
+
+[lint.pydocstyle]
+convention = "google"
+
+[lint.mccabe]
+max-complexity = 20  # Fairly lenient
+
+[lint.per-file-ignores]
+"test/*" = ["INP001", "D100"]
+
+[format]
+exclude = ["*.ipynb"]
