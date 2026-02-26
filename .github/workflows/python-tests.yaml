@@ -18,6 +18,9 @@ jobs:
 
     - name: Install local source package
       run: pip install -e .
+    
+    - name: Install optional dependencies
+      run: pip install -e ".[testing,notebook,linting]"
 
     - name: Run python unit tests
       run: cd test && pytest .
