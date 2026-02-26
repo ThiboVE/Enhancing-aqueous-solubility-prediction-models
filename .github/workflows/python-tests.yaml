@@ -16,11 +16,11 @@ jobs:
       with:
         python-version: "3.12"
 
-    - name: Install requirements
-      run: pip install -r requirements.txt
-
     - name: Install local source package
-      run: pip install -e src/
+      run: pip install -e .
+    
+    - name: Install optional dependencies
+      run: pip install -e ".[testing,notebook,linting]"
 
     - name: Run python unit tests
       run: cd test && pytest .
