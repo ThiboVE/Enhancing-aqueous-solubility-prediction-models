@@ -1,8 +1,15 @@
+"""Module for loading and processing QuantumFP output files.
+
+This module provides utilities for discovering and loading QuantumFP output files,
+converting raw JSON data into conformer-level DataFrames, and managing quantum
+mechanical properties extracted from quantum chemistry calculations.
+"""
+
 import gzip
 import json
 import re
+from _collections_abc import Generator
 from pathlib import Path
-from typing import Generator
 
 import pandas as pd
 
@@ -69,9 +76,7 @@ PROPERTY_DICT = {
 
 
 class QuantumFPFileLoader:
-    """
-    Responsible for discovering and loading QuantumFP output files.
-    """
+    """Responsible for discovering and loading QuantumFP output files."""
 
     _PROP_PATTERN = re.compile(r"prop_id")
 
@@ -84,20 +89,16 @@ class QuantumFPFileLoader:
         self.property_dict = property_dict
 
     def list_output_files(self, extension: str = ".gz") -> list[Path]:
-        """
-        Return all output files with the given extension.
-        """
-        return [
-            path for path in self.data_directory.iterdir() if path.suffix == extension
-        ]
+        """Return all output files with the given extension."""
+        return [path for path in self.data_directory.iterdir() if path.suffix == extension]
 
     def stream_conformer_dataframe(
         self,
         file: Path,
     ) -> Generator[pd.DataFrame, None, None]:
-        """
-        Load a single file, convert it to a conformer-level DataFrame,
-        yield it, and release memory afterward.
+        """Load a single file, convert it to a conformer-level DataFrame.
+
+        Yield it, and release memory afterward.
         """
         with gzip.open(file, "rt") as f:
             data: list[dict] = json.load(f)
@@ -110,11 +111,7 @@ class QuantumFPFileLoader:
         self,
         data: list[dict],
     ) -> pd.DataFrame:
-        """
-        Convert raw QuantumFP conformer JSON data
-        into a conformer-level DataFrame.
-        """
-
+        """Convert raw QuantumFP conformer JSON data into a conformer-level DataFrame."""
         rows: list[dict] = []
 
         for conformer in data:

@@ -1,14 +1,11 @@
 import numpy as np
 import pandas as pd
 
-from library import ConformerAggregator  # replace with actual import
+from ml_enhance import ConformerAggregator  # replace with actual import
 
 
-def test_thermal_average_basic():
-    """
-    Test thermal_average with a small, known dataset.
-    """
-
+def test_thermal_average_basic() -> None:
+    """Test thermal_average with a small, known dataset."""
     # Small test dataframe: 2 conformers
     df = pd.DataFrame(
         {
@@ -41,10 +38,8 @@ def test_thermal_average_basic():
     assert np.isclose(result["entropy_300K"], expected_entropy)
 
 
-def test_only_float_columns_aggregated():
-    """
-    Ensure only float columns are aggregated.
-    """
+def test_only_float_columns_aggregated() -> None:
+    """Ensure only float columns are aggregated."""
     df = pd.DataFrame(
         {
             "original_smiles": ["C", "C"],

@@ -1,4 +1,9 @@
 *.pyc
-data/QuantumFP/QFP_output/*
-data/QuantumFP/corrupted/*
-data/QuantumFP/redownload_corrupted/*
+__pycache__/
+*.egg-info/
+*.json.gz
+.DS_Store
+.ipynb_checkpoints/
+.idea/
+.vscode/
+.venv/

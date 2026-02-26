@@ -1,20 +1,20 @@
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 import pandas as pd
 
-from library.general_functions import parallelize
-from library.qfp_processing.aggregation import ConformerAggregator
-from library.qfp_processing.feature_engineering import QFPFeatureEngineer
-from library.qfp_processing.file_loader import QuantumFPFileLoader
+from ml_enhance.general_functions import parallelize
+from ml_enhance.qfp_processing.aggregation import ConformerAggregator
+from ml_enhance.qfp_processing.feature_engineering import QFPFeatureEngineer
+from ml_enhance.qfp_processing.file_loader import QuantumFPFileLoader
 
 # MARK: TODO: add a function to save the final dataset to disk (add intermediate save point every 1000 molecules or something)
 
 
 class QuantumFPDatasetBuilder:
-    """
-    Coordinates streaming, feature processing,
-    conformer aggregation, and dataset assembly.
+    """Coordinates streaming, feature processing, and dataset assembly.
+
+    Handles conformer aggregation and dataset assembly.
     """
 
     def __init__(self, data_directory: Path, temperature: float = 300.0) -> None:
@@ -29,19 +29,16 @@ class QuantumFPDatasetBuilder:
 
                 mol_features: pd.Series = self.aggregator.thermal_average(df)
 
-            return mol_features
-
         except Exception as e:
             print(f"Error '{e}' occured for {file}")
             return None
+        else:
+            return mol_features
 
     def build_dataset(
         self, cap: int | None = None, multiprocess: bool = False, n_jobs: int = 4
     ) -> tuple[pd.DataFrame, list[Path]]:
-        """
-        Stream-process all molecules and assemble final dataset.
-        """
-
+        """Stream-process all molecules and assemble final dataset."""
         molecule_rows: list[pd.Series] = []
         error_files: list[Path] = []
 
@@ -62,12 +59,11 @@ class QuantumFPDatasetBuilder:
 
         return pd.DataFrame(molecule_rows), error_files
 
-    def _stream_dataset(self, clean=True) -> Generator[pd.Series, None, None]:
-        """
-        Fully streaming version.
+    def _stream_dataset(self, clean: bool = True) -> Generator[pd.Series, None, None]:
+        """Fully streaming version.
+
         Yields one molecule-level row at a time.
         """
-
         for file in self.loader.list_output_files():
             for df in self.loader.stream_conformer_dataframe(file):
                 if clean:

@@ -3,13 +3,11 @@ import json
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
-from library import QuantumFPFileLoader
+from ml_enhance import QuantumFPFileLoader
 
 
-def test_list_output_files(tmp_path: Path):
-
+def test_list_output_files(tmp_path: Path) -> None:
     # Create fake files
     (tmp_path / "file1.json.gz").touch()
     (tmp_path / "file2.json.gz").touch()
@@ -23,31 +21,17 @@ def test_list_output_files(tmp_path: Path):
     assert all(f.suffix == ".gz" for f in files)
 
 
-def test_build_conformer_dataframe():
-
-    property_dict = {
-        1: "energy",
-        2: "dipole"
-    }
+def test_build_conformer_dataframe() -> None:
+    property_dict = {1: "energy", 2: "dipole"}
 
     loader = QuantumFPFileLoader("dummy_path", property_dict)
 
     fake_data = [
-        {
-            "prop_id_1": -10.5,
-            "prop_id_2": 3.2,
-            "original_smiles": "CCO",
-            "output_smiles": "CCO"
-        },
-        {
-            "prop_id_1": -9.8,
-            "prop_id_2": 2.9,
-            "original_smiles": "CCO",
-            "output_smiles": "CCO"
-        }
+        {"prop_id_1": -10.5, "prop_id_2": 3.2, "original_smiles": "CCO", "output_smiles": "CCO"},
+        {"prop_id_1": -9.8, "prop_id_2": 2.9, "original_smiles": "CCO", "output_smiles": "CCO"},
     ]
 
-    df = loader._build_conformer_dataframe(fake_data)
+    df = loader._build_conformer_dataframe(fake_data)  # noqa: SLF001
 
     assert isinstance(df, pd.DataFrame)
     assert df.shape[0] == 2
@@ -56,17 +40,10 @@ def test_build_conformer_dataframe():
     assert "original_smiles" in df.columns
 
 
-def test_stream_conformer_dataframe(tmp_path: Path):
-
+def test_stream_conformer_dataframe(tmp_path: Path) -> None:
     property_dict = {1: "energy"}
 
-    fake_data = [
-        {
-            "prop_id_1": -10.0,
-            "original_smiles": "CCO",
-            "output_smiles": "CCO"
-        }
-    ]
+    fake_data = [{"prop_id_1": -10.0, "original_smiles": "CCO", "output_smiles": "CCO"}]
 
     file_path = tmp_path / "test.gz"
 

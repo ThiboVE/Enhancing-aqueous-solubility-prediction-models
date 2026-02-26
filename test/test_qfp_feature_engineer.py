@@ -2,11 +2,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from library import QFPFeatureEngineer
+from ml_enhance import QFPFeatureEngineer
 
 
 @pytest.fixture
-def mock_dataframe():
+def mock_dataframe() -> pd.DataFrame:
     """Mock DataFrame with all features needed to run QFPFeatureEngineer."""
     return pd.DataFrame(
         {
@@ -96,9 +96,9 @@ def mock_dataframe():
 # ------------------------------------------------------------
 # Tensor removal
 # ------------------------------------------------------------
-def test_remove_tensor_features(mock_dataframe):
+def test_remove_tensor_features(mock_dataframe: pd.DataFrame) -> None:
     engineer = QFPFeatureEngineer(temperature=300)
-    df_clean = engineer._remove_tensor_features(mock_dataframe)
+    df_clean = engineer._remove_tensor_features(mock_dataframe)  # noqa: SLF001
 
     for col in [
         "molecular_dipole",
@@ -114,9 +114,9 @@ def test_remove_tensor_features(mock_dataframe):
 # ------------------------------------------------------------
 # Thermodynamic selection
 # ------------------------------------------------------------
-def test_select_thermodynamic_features(mock_dataframe):
+def test_select_thermodynamic_features(mock_dataframe: pd.DataFrame) -> None:
     engineer = QFPFeatureEngineer(temperature=300)
-    df_out = engineer._select_thermodynamic_features(mock_dataframe)
+    df_out = engineer._select_thermodynamic_features(mock_dataframe)  # noqa: SLF001
 
     # Check new columns exist
     for feature in ["gibbs_free_energy", "entropy", "heat_capacity"]:
@@ -124,24 +124,24 @@ def test_select_thermodynamic_features(mock_dataframe):
         assert col_name in df_out.columns
 
     # Check computed values match mock data
-    assert df_out.loc[0, "gibbs_free_energy_300K"] == -12
-    assert df_out.loc[1, "gibbs_free_energy_300K"] == -11
-    assert df_out.loc[0, "entropy_300K"] == 55
-    assert df_out.loc[1, "entropy_300K"] == 57
-    assert df_out.loc[0, "heat_capacity_300K"] == 11
-    assert df_out.loc[1, "heat_capacity_300K"] == 11.5
+    assert df_out.loc[0, "gibbs_free_energy_300K"] == -12  # noqa: PLR2004
+    assert df_out.loc[1, "gibbs_free_energy_300K"] == -11  # noqa: PLR2004
+    assert df_out.loc[0, "entropy_300K"] == 55  # noqa: PLR2004
+    assert df_out.loc[1, "entropy_300K"] == 57  # noqa: PLR2004
+    assert df_out.loc[0, "heat_capacity_300K"] == 11  # noqa: PLR2004
+    assert df_out.loc[1, "heat_capacity_300K"] == 11.5  # noqa: PLR2004
 
 
 # ------------------------------------------------------------
 # IR aggregation
 # ------------------------------------------------------------
-def test_aggregate_ir_regions(mock_dataframe):
+def test_aggregate_ir_regions(mock_dataframe: pd.DataFrame) -> None:
     engineer = QFPFeatureEngineer(temperature=300)
-    df_out = engineer._aggregate_ir_regions(mock_dataframe)
+    df_out = engineer._aggregate_ir_regions(mock_dataframe)  # noqa: SLF001
 
     # Expected means for first row
-    freqs = np.array([500, 1000, 2000, 3000])
-    intensities = np.array([1.0, 2.0, 3.0, 4.0])
+    # freqs = np.array([500, 1000, 2000, 3000])  # noqa: ERA001
+    # intensities = np.array([1.0, 2.0, 3.0, 4.0])   # noqa: ERA001
 
     assert df_out.loc[0, "ir_centroid_freq_1500"] == pytest.approx(
         2500 / 3  # centroid_freq(freqs < 1500)
@@ -170,9 +170,9 @@ def test_aggregate_ir_regions(mock_dataframe):
 # ------------------------------------------------------------
 # Atomic aggregation
 # ------------------------------------------------------------
-def test_aggregate_atomic_features(mock_dataframe):
+def test_aggregate_atomic_features(mock_dataframe: pd.DataFrame) -> None:
     engineer = QFPFeatureEngineer(temperature=300)
-    df_out = engineer._aggregate_atomic_features(mock_dataframe)
+    df_out = engineer._aggregate_atomic_features(mock_dataframe)  # noqa: SLF001
 
     # Compute expected averages manually for first row
     expected_avg_effective_coordination_number = np.mean([2.0, 1.0])
@@ -181,9 +181,7 @@ def test_aggregate_atomic_features(mock_dataframe):
     assert df_out.loc[0, "avg_effective_coordination_number"] == pytest.approx(
         expected_avg_effective_coordination_number
     )
-    assert df_out.loc[0, "avg_partial_charge"] == pytest.approx(
-        expected_avg_partial_charge
-    )
+    assert df_out.loc[0, "avg_partial_charge"] == pytest.approx(expected_avg_partial_charge)
 
     # Original columns removed
     for col in ["effective_coordination_number", "partial_charge"]:
@@ -193,9 +191,9 @@ def test_aggregate_atomic_features(mock_dataframe):
 # ------------------------------------------------------------
 # Interaction aggregation
 # ------------------------------------------------------------
-def test_aggregate_interaction_features(mock_dataframe):
+def test_aggregate_interaction_features(mock_dataframe: pd.DataFrame) -> None:
     engineer = QFPFeatureEngineer(temperature=300)
-    df_out = engineer._aggregate_interaction_features(mock_dataframe)
+    df_out = engineer._aggregate_interaction_features(mock_dataframe)  # noqa: SLF001
 
     # Expected average for first row
     expected_avg_bond_energy = np.mean([10.0, 20.0])
