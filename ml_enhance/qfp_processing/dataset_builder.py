@@ -29,11 +29,11 @@ class QuantumFPDatasetBuilder:
 
                 mol_features: pd.Series = self.aggregator.thermal_average(df)
 
-            return mol_features
-
         except Exception as e:
             print(f"Error '{e}' occured for {file}")
             return None
+        else:
+            return mol_features
 
     def build_dataset(
         self, cap: int | None = None, multiprocess: bool = False, n_jobs: int = 4
@@ -61,6 +61,7 @@ class QuantumFPDatasetBuilder:
 
     def _stream_dataset(self, clean: bool = True) -> Generator[pd.Series, None, None]:
         """Fully streaming version.
+
         Yields one molecule-level row at a time.
         """
         for file in self.loader.list_output_files():
