@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from library import RDKitFeatureCalculator
+from ml_enhance import RDKitFeatureCalculator
 
 # ---------------------------------------------------------
 # Fixtures
@@ -9,17 +9,17 @@ from library import RDKitFeatureCalculator
 
 
 @pytest.fixture
-def calculator():
+def calculator() -> RDKitFeatureCalculator:
     return RDKitFeatureCalculator()
 
 
 @pytest.fixture
-def simple_df():
+def simple_df() -> pd.DataFrame:
     return pd.DataFrame({"smiles": ["CC", "O"]})
 
 
 @pytest.fixture
-def invalid_df():
+def invalid_df() -> pd.DataFrame:
     return pd.DataFrame({"smiles": ["INVALID"]})
 
 
@@ -29,15 +29,15 @@ def invalid_df():
 
 
 @pytest.mark.parametrize(
-    "smiles, expected_molwt, expected_hdonors",
+    ("smiles", "expected_molwt", "expected_hdonors"),
     [
         ("CC", 30.07, 0),  # ethane
         ("O", 18.01, 0),  # water
     ],
 )
 def test_compute_descriptors_values(
-    calculator, smiles, expected_molwt, expected_hdonors
-):
+    calculator: RDKitFeatureCalculator, smiles: str, expected_molwt: float, expected_hdonors: int
+) -> None:
     df = pd.DataFrame({"smiles": [smiles]})
     result = calculator.compute_descriptors(df)
 
@@ -48,7 +48,7 @@ def test_compute_descriptors_values(
     assert result.loc[0, "NumHDonors"] == expected_hdonors
 
 
-def test_compute_descriptors_invalid_smiles(calculator, invalid_df):
+def test_compute_descriptors_invalid_smiles(calculator: RDKitFeatureCalculator, invalid_df: pd.DataFrame) -> None:
     result = calculator.compute_descriptors(invalid_df)
 
     assert "MolWt" in result.columns
@@ -60,7 +60,9 @@ def test_compute_descriptors_invalid_smiles(calculator, invalid_df):
 # ---------------------------------------------------------
 
 
-def test_add_to_dataframe_preserves_original_columns(calculator, simple_df):
+def test_add_to_dataframe_preserves_original_columns(
+    calculator: RDKitFeatureCalculator, simple_df: pd.DataFrame
+) -> None:
     result = calculator.add_to_dataframe(simple_df)
 
     assert "smiles" in result.columns
@@ -68,6 +70,6 @@ def test_add_to_dataframe_preserves_original_columns(calculator, simple_df):
     assert len(result) == len(simple_df)
 
 
-def test_add_to_dataframe_no_row_change(calculator, simple_df):
+def test_add_to_dataframe_no_row_change(calculator: RDKitFeatureCalculator, simple_df: pd.DataFrame) -> None:
     result = calculator.add_to_dataframe(simple_df)
     assert result.shape[0] == simple_df.shape[0]
