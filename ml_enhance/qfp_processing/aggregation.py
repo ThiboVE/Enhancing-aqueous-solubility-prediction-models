@@ -30,8 +30,8 @@ class ConformerAggregator:
 
         result = {"smiles": df["original_smiles"].iloc[0]}
 
-        float_cols = df.select_dtypes(include="float64").columns
+        float_cols = df.select_dtypes(include=["float64", "int64"]).columns
         for col in float_cols:
-            result[col] = np.dot(weights, df[col].to_numpy())
+            result[col] = np.dot(weights, df[col].to_numpy()).astype(pd.Float64Dtype)
 
         return pd.Series(result)
