@@ -24,13 +24,14 @@ class ConformerAggregator:
 
         """
         G = df["gibbs_free_energy_300K"].to_numpy()
-        boltzmann_factors = np.exp(-G / (self.k_B * self.temperature))
+        delta_G = G - G.min()
+        boltzmann_factors = np.exp(-delta_G / (self.k_B * self.temperature))
         weights = boltzmann_factors / boltzmann_factors.sum()
 
         result = {"smiles": df["original_smiles"].iloc[0]}
 
-        float_cols = df.select_dtypes(include="float64").columns
+        float_cols = df.select_dtypes(include=["float64", "int64"]).columns
         for col in float_cols:
-            result[col] = np.dot(weights, df[col].to_numpy())
+            result[col] = np.dot(weights, df[col].to_numpy()).astype(pd.Float64Dtype)
 
         return pd.Series(result)

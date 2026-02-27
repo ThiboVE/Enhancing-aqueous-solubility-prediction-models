@@ -21,7 +21,8 @@ class QFPFeatureEngineer:
         df = self._select_thermodynamic_features(df)
         df = self._aggregate_ir_regions(df)
         df = self._aggregate_atomic_features(df)
-        return self._aggregate_interaction_features(df)
+        df = self._aggregate_interaction_features(df)
+        return self._aggregate_bond_energy(df)
 
     def _remove_tensor_features(self, df: pd.DataFrame) -> pd.DataFrame:
         features_to_remove = [
@@ -87,10 +88,12 @@ class QFPFeatureEngineer:
             for i, label in enumerate(freq_labels, start=1):
                 idxs = np.where(bin_indices == i)[0]
 
+                feature_dict[f"ir_mode_count_{label}"] = len(idxs)
+
                 feature_dict[f"ir_centroid_freq_{label}"] = (
-                    centroid_freq(freqs, intensities, idxs) if len(idxs) > 0 else 0
+                    centroid_freq(freqs, intensities, idxs) if len(idxs) > 0 else 0.0
                 )
-                feature_dict[f"ir_norm_intensity_{label}"] = norm_intensity(intensities, idxs) if len(idxs) > 0 else 0
+                feature_dict[f"ir_norm_intensity_{label}"] = norm_intensity(intensities, idxs) if len(idxs) > 0 else 0.0
 
             new_features_list.append(feature_dict)
 
@@ -128,11 +131,8 @@ class QFPFeatureEngineer:
             "partial_charge_dmso",
         }
 
-        def get_mean(atomic_feature: list[list[int, float]]) -> float:
-            return np.array([x[1] for x in atomic_feature]).mean()
-
         for feature in atomic_features:
-            df[f"avg_{feature}"] = df[feature].apply(get_mean).astype("Float64")
+            df[f"avg_{feature}"] = df[feature].apply(self.get_atomic_mean).astype("Float64")
 
         return df.drop(
             atomic_features,
@@ -142,7 +142,6 @@ class QFPFeatureEngineer:
 
     def _aggregate_interaction_features(self, df: pd.DataFrame) -> pd.DataFrame:
         interaction_features = {
-            "bond_energy",
             "bond_length",
             "bond_stiffness",
             "overlap_integral",
@@ -152,11 +151,8 @@ class QFPFeatureEngineer:
             "atomic_dipole_dipole_interaction",
         }
 
-        def get_mean(interaction_feature: list[list[int, int, float]]) -> float:
-            return np.array([x[2] for x in interaction_feature]).mean()
-
         for feature in interaction_features:
-            df[f"avg_{feature}"] = df[feature].apply(get_mean).astype("Float64")
+            df[f"avg_{feature}"] = df[feature].apply(self.get_interaction_mean).astype("Float64")
 
         return df.drop(
             interaction_features,
@@ -164,12 +160,31 @@ class QFPFeatureEngineer:
             errors="ignore",
         )
 
+    def _aggregate_bond_energy(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Specifically deal with the heavy atom-H bond energy.
+
+        This function also explicitly deals with the case that there are no bond energies (absence of heavy atom-H bonds).
+        """
+        df["avg_bond_energy"] = df["bond_energy"].apply(self.get_interaction_mean).astype("Float64")
+
+        df["num_heavy_H_bonds"] = df["bond_energy"].apply(len).astype("Float64")
+
+        return df.drop(["bond_energy"], axis=1, errors="ignore")
+
+    def get_atomic_mean(self, atomic_feature: list[list[int, float]]) -> float:
+        """Helper function te get the mean of atomic features."""
+        return np.array([x[1] for x in atomic_feature]).mean()
+
+    def get_interaction_mean(self, interaction_feature: list[list[int, int, float]]) -> float:
+        """Helper function to get the mean of interaction features."""
+        return np.array([x[2] for x in interaction_feature]).mean() if len(interaction_feature) != 0 else 0
+
 
 def centroid_freq(freqs: np.ndarray[float], intensities: np.ndarray[float], mask: np.ndarray[bool]) -> float:
-    """Region centroid frequency for a region: v_k,R = \frac{\\sum_{i \\in R} v_k,i I_k,i}{\\sum_{i \\in R} v_k,i}"""
+    r"""Region centroid frequency for a region: v_k,R = \frac{\\sum_{i \\in R} v_k,i I_k,i}{\\sum_{i \\in R} v_k,i}."""
     return np.dot(freqs[mask], intensities[mask]) / intensities[mask].sum()
 
 
 def norm_intensity(intensities: np.ndarray[float], mask: np.ndarray[bool]) -> float:
-    """Normalized intensity for a region: I_k,R = \frac{\\sum_{i \\in R} I_k,i}{\\sum_{i \\in all} I_k,i}"""
+    r"""Normalized intensity for a region: I_k,R = \frac{\\sum_{i \\in R} I_k,i}{\\sum_{i \\in all} I_k,i}."""
     return intensities[mask].sum() / intensities.sum()
