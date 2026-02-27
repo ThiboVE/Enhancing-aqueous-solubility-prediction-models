@@ -9,6 +9,8 @@ from rdkit import Chem
 from rdkit.Chem import Descriptors
 from rdkit.ML.Descriptors import MoleculeDescriptors
 
+from ml_enhance import parallelize
+
 
 class RDKitFeatureCalculator:
     """Compute molecular descriptors from SMILES using RDKit.
@@ -22,26 +24,35 @@ class RDKitFeatureCalculator:
         self.descriptor_names = [name for name, _ in Descriptors._descList]  # noqa: SLF001
         self.calculator = MoleculeDescriptors.MolecularDescriptorCalculator(self.descriptor_names)
 
-    def compute_descriptors(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _compute_descriptor_per_mol(self, smiles: str) -> tuple:
+        mol = Chem.MolFromSmiles(smiles)
+
+        if mol is None:
+            print(f"SMILES: {smiles} is invalid, features are assigned 'None'.")  # noqa: T201
+            return [None] * 217
+
+        return self.calculator.CalcDescriptors(mol)
+
+    def compute_descriptors(
+        self, df: pd.DataFrame, *, multiprocess: bool = False, n_jobs: int = 4, backend: str = "loky"
+    ) -> pd.DataFrame:
         """Compute RDKit descriptors for all molecules in the DataFrame.
 
         Returns a new DataFrame with the computed features.
         """
         smiles_list = df[self.smiles_column]
 
-        feature_list = []
-        for smiles in smiles_list:
-            mol = Chem.MolFromSmiles(smiles)
-
-            if mol is None:
-                print(f"SMILES: {smiles} is invalid, features are assigned 'None'.")  # noqa: T201
-                feature_list.append([None] * 217)
-            else:
-                feature_list.append(self.calculator.CalcDescriptors(mol))
+        feature_list = (
+            parallelize(self._compute_descriptor_per_mol, smiles_list, n_jobs=n_jobs, backend=backend)
+            if multiprocess
+            else [self._compute_descriptor_per_mol(smiles) for smiles in smiles_list]
+        )
 
         return pd.DataFrame(feature_list, columns=self.descriptor_names)
 
-    def add_to_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+    def add_to_dataframe(
+        self, df: pd.DataFrame, *, multiprocess: bool = False, n_jobs: int = 4, backend: str = "loky"
+    ) -> pd.DataFrame:
         """Compute RDKit descriptors and merge them into the original DataFrame."""
-        rdkit_features = self.compute_descriptors(df)
+        rdkit_features = self.compute_descriptors(df, multiprocess=multiprocess, n_jobs=n_jobs, backend=backend)
         return pd.concat([df.reset_index(drop=True), rdkit_features.reset_index(drop=True)], axis=1)
