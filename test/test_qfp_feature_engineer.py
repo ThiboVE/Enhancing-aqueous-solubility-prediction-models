@@ -63,7 +63,7 @@ def mock_dataframe() -> pd.DataFrame:
             ],
             "partial_charge_dmso": [[(1, -0.6), (2, 0.5)], [(1, -0.55), (2, 0.55)]],
             # Interaction features
-            "bond_energy": [[(0, 1, 10.0), (1, 2, 20.0)], [(0, 1, 15.0), (1, 2, 25.0)]],
+            "bond_energy": [[[0, 1, 10.0], [1, 2, 20.0]], [[0, 1, 15.0], [1, 2, 25.0]]],
             "bond_length": [[(0, 1, 1.0), (1, 2, 2.0)], [(0, 1, 1.5), (1, 2, 2.5)]],
             "bond_stiffness": [
                 [(0, 1, 100.0), (1, 2, 200.0)],
@@ -149,18 +149,21 @@ def test_aggregate_ir_regions(mock_dataframe: pd.DataFrame) -> None:
     assert df_out.loc[0, "ir_norm_intensity_1500"] == pytest.approx(
         0.3  # norm_intensity(freqs < 1500)
     )
+    assert df_out.loc[0, "ir_mode_count_1500"] == 2
     assert df_out.loc[0, "ir_centroid_freq_1500_2750"] == pytest.approx(
         2000  # centroid_freq((freqs >= 1500) & (freqs < 2750))
     )
     assert df_out.loc[0, "ir_norm_intensity_1500_2750"] == pytest.approx(
         0.3  # norm_intensity((freqs >= 1500) & (freqs < 2750))
     )
+    assert df_out.loc[0, "ir_mode_count_1500_2750"] == 1
     assert df_out.loc[0, "ir_centroid_freq_2750_4000"] == pytest.approx(
         3000  # centroid_freq(freqs >= 2750)
     )
     assert df_out.loc[0, "ir_norm_intensity_2750_4000"] == pytest.approx(
         0.4  # norm_intensity(freqs >= 2750)
     )
+    assert df_out.loc[0, "ir_mode_count_2750_4000"] == 1
 
     # Raw columns removed
     for col in ["normal_mode_frequencies", "infrared_intensity", "normal_modes"]:
@@ -196,12 +199,44 @@ def test_aggregate_interaction_features(mock_dataframe: pd.DataFrame) -> None:
     df_out = engineer._aggregate_interaction_features(mock_dataframe)  # noqa: SLF001
 
     # Expected average for first row
-    expected_avg_bond_energy = np.mean([10.0, 20.0])
+    expected_avg_nuclear_repulsion = np.mean([5.0, 15.0])
     expected_avg_bond_length = np.mean([1.0, 2.0])
 
-    assert df_out.loc[0, "avg_bond_energy"] == pytest.approx(expected_avg_bond_energy)
+    assert df_out.loc[0, "avg_nuclear_repulsion"] == pytest.approx(expected_avg_nuclear_repulsion)
     assert df_out.loc[0, "avg_bond_length"] == pytest.approx(expected_avg_bond_length)
 
     # Original columns removed
-    for col in ["bond_energy", "bond_length"]:
+    for col in ["nuclear_repulsion", "bond_length"]:
         assert col not in df_out.columns
+
+
+# ------------------------------------------------------------
+# Bond energy aggregation
+# ------------------------------------------------------------
+def test_aggregate_bond_energy(mock_dataframe: pd.DataFrame) -> None:
+    engineer = QFPFeatureEngineer(temperature=300)
+
+    df_out = engineer._aggregate_bond_energy(mock_dataframe)  # noqa: SLF001
+
+    expected_avg = np.mean([10.0, 20.0])
+
+    # Original column removed
+    assert "bond_energy" not in df_out.columns
+    assert "avg_bond_energy" in df_out.columns
+
+    assert df_out.loc[0, "avg_bond_energy"] == pytest.approx(expected_avg)
+    assert df_out.loc[0, "num_heavy_H_bonds"] == 2.0
+
+
+def test_aggregate_bond_energy_empty_list(
+    mock_dataframe: pd.DataFrame,
+) -> None:
+    engineer = QFPFeatureEngineer(temperature=300)
+
+    df = mock_dataframe.copy()
+    df.at[0, "bond_energy"] = []
+
+    df_out = engineer._aggregate_bond_energy(df)  # noqa: SLF001
+
+    assert df_out.loc[0, "avg_bond_energy"] == 0.0
+    assert df_out.loc[0, "num_heavy_H_bonds"] == 0.0
