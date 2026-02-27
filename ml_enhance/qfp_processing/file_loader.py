@@ -133,3 +133,10 @@ class QuantumFPFileLoader:
             rows.append(qm_features)
 
         return pd.DataFrame(rows).convert_dtypes()
+
+
+# if __name__ == "__main__":
+#     with open("../data/properties.json", "r") as f:
+#     properties_list = json.load(f)
+
+#     PROPERTY_DICT = {prop["property_db_id"]: prop["name_of_property"] for prop in properties_list}

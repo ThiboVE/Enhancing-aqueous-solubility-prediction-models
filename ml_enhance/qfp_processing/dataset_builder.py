@@ -8,8 +8,6 @@ from ml_enhance.qfp_processing.aggregation import ConformerAggregator
 from ml_enhance.qfp_processing.feature_engineering import QFPFeatureEngineer
 from ml_enhance.qfp_processing.file_loader import QuantumFPFileLoader
 
-# MARK: TODO: add a function to save the final dataset to disk (add intermediate save point every 1000 molecules or something)
-
 
 class QuantumFPDatasetBuilder:
     """Coordinates streaming, feature processing, and dataset assembly.
@@ -25,9 +23,9 @@ class QuantumFPDatasetBuilder:
     def build_single_molecule(self, file: Path) -> pd.Series | None:
         try:
             for df in self.loader.stream_conformer_dataframe(file):
-                df = self.engineer.clean_features(df)
+                cleaned_df = self.engineer.clean_features(df)
 
-                mol_features: pd.Series = self.aggregator.thermal_average(df)
+                mol_features: pd.Series = self.aggregator.thermal_average(cleaned_df)
 
         except Exception as e:
             print(f"Error '{e}' occured for {file}")
@@ -36,7 +34,7 @@ class QuantumFPDatasetBuilder:
             return mol_features
 
     def build_dataset(
-        self, cap: int | None = None, multiprocess: bool = False, n_jobs: int = 4
+        self, cap: int | None = None, *, multiprocess: bool = False, n_jobs: int = 4
     ) -> tuple[pd.DataFrame, list[Path]]:
         """Stream-process all molecules and assemble final dataset."""
         molecule_rows: list[pd.Series] = []
@@ -59,7 +57,7 @@ class QuantumFPDatasetBuilder:
 
         return pd.DataFrame(molecule_rows), error_files
 
-    def _stream_dataset(self, clean: bool = True) -> Generator[pd.Series, None, None]:
+    def _stream_dataset(self, *, clean: bool = True) -> Generator[pd.Series, None, None]:
         """Fully streaming version.
 
         Yields one molecule-level row at a time.
@@ -67,6 +65,6 @@ class QuantumFPDatasetBuilder:
         for file in self.loader.list_output_files():
             for df in self.loader.stream_conformer_dataframe(file):
                 if clean:
-                    df = self.engineer.clean_features(df)
+                    cleaned_df = self.engineer.clean_features(df)
 
-                yield self.aggregator.thermal_average(df)
+                yield self.aggregator.thermal_average(cleaned_df)
