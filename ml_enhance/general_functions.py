@@ -4,6 +4,7 @@ from _collections_abc import Callable, Iterable
 from typing import Any
 
 from joblib import Parallel, delayed
+from rdkit import Chem
 from tqdm import tqdm
 
 
@@ -22,3 +23,25 @@ def parallelize(
         list[Any]: A list of results from the function applied on the iterable
     """
     return Parallel(n_jobs=n_jobs, backend=backend)(delayed(func)(item) for item in tqdm(iterable))
+
+
+def canonicalize_smiles(smiles: str) -> str | None:
+    """Canonicalize a SMILES string.
+
+    Args:
+        smiles (str): non-canonical SMILES string
+
+    Returns:
+        str | None: Canonical SMILES or None if the SMILES was not valid.
+    """
+    if not isinstance(smiles, str):
+        return None
+
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return None
+
+    for atom in mol.GetAtoms():
+        atom.SetAtomMapNum(0)
+
+    return Chem.MolToSmiles(mol, canonical=True)

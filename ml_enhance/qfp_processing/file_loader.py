@@ -85,6 +85,8 @@ class QuantumFPFileLoader:
         data_directory: Path,
         property_dict: dict[int, str] = PROPERTY_DICT,
     ) -> None:
+        assert Path(data_directory).exists(), "data directory does not exist."
+        assert Path(data_directory).is_dir(), "data directory must be a directory."
         self.data_directory = Path(data_directory)
         self.property_dict = property_dict
 
