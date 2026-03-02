@@ -7,3 +7,5 @@ __pycache__/
 .idea/
 .vscode/
 .venv/
+img/*
+data/sandbox_data/*

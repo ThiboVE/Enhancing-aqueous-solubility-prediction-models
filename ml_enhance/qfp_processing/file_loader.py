@@ -117,6 +117,11 @@ class QuantumFPFileLoader:
         for conformer in data:
             qm_features: dict[str, float] = {}
 
+            # Attach metadata
+            qm_features["id"] = conformer["id"]
+            qm_features["original_smiles"] = conformer["original_smiles"]
+            qm_features["output_smiles"] = conformer["output_smiles"]
+
             for key, value in conformer.items():
                 if self._PROP_PATTERN.search(key):
                     prop_id = int(key.rsplit("_", 1)[-1])
@@ -125,10 +130,6 @@ class QuantumFPFileLoader:
 
                     if feature_name is not None:
                         qm_features[feature_name] = value
-
-            # Attach metadata
-            qm_features["original_smiles"] = conformer["original_smiles"]
-            qm_features["output_smiles"] = conformer["output_smiles"]
 
             rows.append(qm_features)
 
