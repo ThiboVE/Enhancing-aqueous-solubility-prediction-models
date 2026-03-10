@@ -21,14 +21,14 @@ def test_list_output_files(tmp_path: Path) -> None:
     assert all(f.suffix == ".gz" for f in files)
 
 
-def test_build_conformer_dataframe() -> None:
+def test_build_conformer_dataframe(tmp_path: Path) -> None:
     property_dict = {1: "energy", 2: "dipole"}
 
-    loader = QuantumFPFileLoader("dummy_path", property_dict)
+    loader = QuantumFPFileLoader(tmp_path, property_dict)
 
     fake_data = [
-        {"prop_id_1": -10.5, "prop_id_2": 3.2, "original_smiles": "CCO", "output_smiles": "CCO"},
-        {"prop_id_1": -9.8, "prop_id_2": 2.9, "original_smiles": "CCO", "output_smiles": "CCO"},
+        {"prop_id_1": -10.5, "prop_id_2": 3.2, "original_smiles": "CCO", "output_smiles": "CCO", "id": 25},
+        {"prop_id_1": -9.8, "prop_id_2": 2.9, "original_smiles": "CCO", "output_smiles": "CCO", "id": 5},
     ]
 
     df = loader._build_conformer_dataframe(fake_data)  # noqa: SLF001
@@ -43,7 +43,7 @@ def test_build_conformer_dataframe() -> None:
 def test_stream_conformer_dataframe(tmp_path: Path) -> None:
     property_dict = {1: "energy"}
 
-    fake_data = [{"prop_id_1": -10.0, "original_smiles": "CCO", "output_smiles": "CCO"}]
+    fake_data = [{"prop_id_1": -10.0, "original_smiles": "CCO", "output_smiles": "CCO", "id": 5}]
 
     file_path = tmp_path / "test.gz"
 

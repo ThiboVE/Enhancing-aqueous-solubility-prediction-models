@@ -32,6 +32,7 @@ class ConformerAggregator:
 
         float_cols = df.select_dtypes(include=["float64", "int64"]).columns
         for col in float_cols:
-            result[col] = np.dot(weights, df[col].to_numpy()).astype(pd.Float64Dtype)
+            average = np.dot(weights, df[col].to_numpy())
+            result[col] = average.astype("int64") if df[col].dtype == "Int64" else average.astype("float64")
 
         return pd.Series(result)

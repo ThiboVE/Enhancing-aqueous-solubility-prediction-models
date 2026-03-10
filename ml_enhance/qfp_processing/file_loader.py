@@ -85,6 +85,8 @@ class QuantumFPFileLoader:
         data_directory: Path,
         property_dict: dict[int, str] = PROPERTY_DICT,
     ) -> None:
+        assert Path(data_directory).exists(), "data directory does not exist."
+        assert Path(data_directory).is_dir(), "data directory must be a directory."
         self.data_directory = Path(data_directory)
         self.property_dict = property_dict
 
@@ -117,6 +119,11 @@ class QuantumFPFileLoader:
         for conformer in data:
             qm_features: dict[str, float] = {}
 
+            # Attach metadata
+            qm_features["id"] = conformer["id"]
+            qm_features["original_smiles"] = conformer["original_smiles"]
+            qm_features["output_smiles"] = conformer["output_smiles"]
+
             for key, value in conformer.items():
                 if self._PROP_PATTERN.search(key):
                     prop_id = int(key.rsplit("_", 1)[-1])
@@ -126,10 +133,13 @@ class QuantumFPFileLoader:
                     if feature_name is not None:
                         qm_features[feature_name] = value
 
-            # Attach metadata
-            qm_features["original_smiles"] = conformer["original_smiles"]
-            qm_features["output_smiles"] = conformer["output_smiles"]
-
             rows.append(qm_features)
 
         return pd.DataFrame(rows).convert_dtypes()
+
+
+# if __name__ == "__main__":
+#     with open("../data/properties.json", "r") as f:
+#     properties_list = json.load(f)
+
+#     PROPERTY_DICT = {prop["property_db_id"]: prop["name_of_property"] for prop in properties_list}
