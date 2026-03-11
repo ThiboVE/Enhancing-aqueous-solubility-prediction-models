@@ -6,7 +6,7 @@ import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
 
-class RemoveCorrelatedFeatures(BaseEstimator, TransformerMixin):
+class CorrelationFilter(BaseEstimator, TransformerMixin):
     """Class that can remove features with a correlation higher than the given threshold value from a pd.DataFrame.
 
     The class is designed to work in a sklearn.pipeline.Pipeline object.
