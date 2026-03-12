@@ -5,6 +5,8 @@ including IR region aggregation, atomic feature aggregation, and interaction
 feature aggregation for molecular property prediction.
 """
 
+from collections.abc import Callable
+
 import numpy as np
 import pandas as pd
 
@@ -21,8 +23,7 @@ class QFPFeatureEngineer:
         df = self._select_thermodynamic_features(df)
         df = self._aggregate_ir_regions(df)
         df = self._aggregate_atomic_features(df)
-        df = self._aggregate_interaction_features(df)
-        return self._aggregate_bond_energy(df)
+        return self._aggregate_interaction_features(df)
 
     def _remove_tensor_features(self, df: pd.DataFrame) -> pd.DataFrame:
         features_to_remove = [
@@ -109,8 +110,26 @@ class QFPFeatureEngineer:
             errors="ignore",
         )
 
+    def _aggregate_list_features(
+        self, df: pd.DataFrame, feature_set: set[str], value_extract_function: Callable
+    ) -> pd.DataFrame:
+        for feature in feature_set:
+            floats_only = df[feature].apply(value_extract_function)
+            exploded = floats_only.explode()
+            stats = exploded.groupby(level=0).agg(["mean", "min", "max"])
+            stats = stats.fillna(0)
+            stats.columns = [f"avg_{feature}", f"min_{feature}", f"max_{feature}"]
+            df = df.join(stats.astype("Float64"))
+
+        # for feature in atomic_features:
+        #     df[f"avg_{feature}"] = df[feature].apply(self.get_interaction_mean).astype("Float64")
+        #     df[f"min_{feature}"] = df[feature].apply(self.get_interaction_min).astype("Float64")
+        #     df[f"max_{feature}"] = df[feature].apply(self.get_interaction_max).astype("Float64")
+
+        return df
+
     def _aggregate_atomic_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Naive approach of just taking the average, later we can look into deviding per atom type."""
+        """Naive approach of just taking the average, later we can look into dividing per atom type."""
         # MARK: TODO: split into atom types and average for each type
 
         atomic_features = {
@@ -131,10 +150,12 @@ class QFPFeatureEngineer:
             "partial_charge_dmso",
         }
 
-        for feature in atomic_features:
-            df[f"avg_{feature}"] = df[feature].apply(self.get_atomic_mean).astype("Float64")
+        def atomic_value_extract_fn(lst: list[list[int, float]]) -> list[float]:
+            return [t[1] for t in lst]
 
-        return df.drop(
+        new_df = self._aggregate_list_features(df, atomic_features, atomic_value_extract_fn)
+
+        return new_df.drop(
             atomic_features,
             axis=1,
             errors="ignore",
@@ -149,35 +170,47 @@ class QFPFeatureEngineer:
             "atomic_charge_dipole_interaction",
             "atomic_charge_quadrupole_interaction",
             "atomic_dipole_dipole_interaction",
+            "bond_energy",
         }
 
-        for feature in interaction_features:
-            df[f"avg_{feature}"] = df[feature].apply(self.get_interaction_mean).astype("Float64")
+        def interaction_value_extract_fn(lst: list[list[int, int, float]]) -> list[float]:
+            return [inner[-1] for inner in lst] if lst else [0.0]
 
-        return df.drop(
+        new_df = self._aggregate_list_features(df, interaction_features, interaction_value_extract_fn)
+
+        new_df["num_heavy_H_bonds"] = (
+            new_df["bond_energy"].apply(len).astype("Float64")
+        )  # deal with the case that there are no bond energies (absence of heavy atom-H bonds)
+
+        return new_df.drop(
             interaction_features,
             axis=1,
             errors="ignore",
         )
 
-    def _aggregate_bond_energy(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Specifically deal with the heavy atom-H bond energy.
+    # def get_atomic_mean(self, atomic_feature: list[list[int, float]]) -> float:
+    #     """Helper function te get the mean of atomic features."""
+    #     return np.array([x[1] for x in atomic_feature]).mean()
 
-        This function also explicitly deals with the case that there are no bond energies (absence of heavy atom-H bonds).
-        """
-        df["avg_bond_energy"] = df["bond_energy"].apply(self.get_interaction_mean).astype("Float64")
+    # def get_atomic_min(self, atomic_feature: list[list[int, float]]) -> float:
+    #     """Helper function te get the minimum value of atomic features."""
+    #     return np.array([x[1] for x in atomic_feature]).min()
 
-        df["num_heavy_H_bonds"] = df["bond_energy"].apply(len).astype("Float64")
+    # def get_atomic_max(self, atomic_feature: list[list[int, float]]) -> float:
+    #     """Helper function te get the maximum value of atomic features."""
+    #     return np.array([x[1] for x in atomic_feature]).max()
 
-        return df.drop(["bond_energy"], axis=1, errors="ignore")
+    # def get_interaction_mean(self, interaction_feature: list[list[int, int, float]]) -> float:
+    #     """Helper function to get the mean of interaction features."""
+    #     return np.array([x[2] for x in interaction_feature]).mean() if len(interaction_feature) != 0 else 0
 
-    def get_atomic_mean(self, atomic_feature: list[list[int, float]]) -> float:
-        """Helper function te get the mean of atomic features."""
-        return np.array([x[1] for x in atomic_feature]).mean()
+    # def get_interaction_min(self, interaction_feature: list[list[int, int, float]]) -> float:
+    #     """Helper function to get the minimum value of interaction features."""
+    #     return np.array([x[2] for x in interaction_feature]).min() if len(interaction_feature) != 0 else 0
 
-    def get_interaction_mean(self, interaction_feature: list[list[int, int, float]]) -> float:
-        """Helper function to get the mean of interaction features."""
-        return np.array([x[2] for x in interaction_feature]).mean() if len(interaction_feature) != 0 else 0
+    # def get_interaction_max(self, interaction_feature: list[list[int, int, float]]) -> float:
+    #     """Helper function to get the maximum value of interaction features."""
+    #     return np.array([x[2] for x in interaction_feature]).max() if len(interaction_feature) != 0 else 0
 
 
 def centroid_freq(freqs: np.ndarray[float], intensities: np.ndarray[float], mask: np.ndarray[bool]) -> float:

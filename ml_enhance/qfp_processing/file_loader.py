@@ -109,37 +109,50 @@ class QuantumFPFileLoader:
 
         yield df
 
-    def _build_conformer_dataframe(
-        self,
-        data: list[dict],
-    ) -> pd.DataFrame:
+    # def _build_conformer_dataframe(
+    #     self,
+    #     data: list[dict],
+    # ) -> pd.DataFrame:
+    #     """Convert raw QuantumFP conformer JSON data into a conformer-level DataFrame."""
+    #     rows: list[dict] = []
+
+    #     for conformer in data:
+    #         qm_features: dict[str, float] = {}
+
+    #         # Attach metadata
+    #         qm_features["id"] = conformer["id"]
+    #         qm_features["original_smiles"] = conformer["original_smiles"]
+    #         qm_features["output_smiles"] = conformer["output_smiles"]
+
+    #         for key, value in conformer.items():
+    #             if self._PROP_PATTERN.search(key):
+    #                 prop_id = int(key.rsplit("_", 1)[-1])
+
+    #                 feature_name = self.property_dict.get(prop_id)
+
+    #                 if feature_name is not None:
+    #                     qm_features[feature_name] = value
+
+    #         rows.append(qm_features)
+
+    #     return pd.DataFrame(rows).convert_dtypes()
+
+    def _build_conformer_dataframe(self, data: list[dict]) -> pd.DataFrame:
         """Convert raw QuantumFP conformer JSON data into a conformer-level DataFrame."""
-        rows: list[dict] = []
+        df = pd.json_normalize(data)
 
-        for conformer in data:
-            qm_features: dict[str, float] = {}
+        prop_cols = [col for col in df.columns if self._PROP_PATTERN.search(col)]
 
-            # Attach metadata
-            qm_features["id"] = conformer["id"]
-            qm_features["original_smiles"] = conformer["original_smiles"]
-            qm_features["output_smiles"] = conformer["output_smiles"]
+        mapping = {}
+        for col in prop_cols:
+            prop_id = int(col.rsplit("_", 1)[-1])
+            feature_name = self.property_dict.get(prop_id)
+            if feature_name is not None:
+                mapping[col] = feature_name
 
-            for key, value in conformer.items():
-                if self._PROP_PATTERN.search(key):
-                    prop_id = int(key.rsplit("_", 1)[-1])
+        df = df.rename(columns=mapping)
 
-                    feature_name = self.property_dict.get(prop_id)
+        keep_cols = ["id", "original_smiles", "output_smiles", *list(mapping.values())]
+        df = df[keep_cols]
 
-                    if feature_name is not None:
-                        qm_features[feature_name] = value
-
-            rows.append(qm_features)
-
-        return pd.DataFrame(rows).convert_dtypes()
-
-
-# if __name__ == "__main__":
-#     with open("../data/properties.json", "r") as f:
-#     properties_list = json.load(f)
-
-#     PROPERTY_DICT = {prop["property_db_id"]: prop["name_of_property"] for prop in properties_list}
+        return df.convert_dtypes()

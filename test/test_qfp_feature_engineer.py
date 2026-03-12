@@ -216,7 +216,7 @@ def test_aggregate_interaction_features(mock_dataframe: pd.DataFrame) -> None:
 def test_aggregate_bond_energy(mock_dataframe: pd.DataFrame) -> None:
     engineer = QFPFeatureEngineer(temperature=300)
 
-    df_out = engineer._aggregate_bond_energy(mock_dataframe)  # noqa: SLF001
+    df_out = engineer._aggregate_interaction_features(mock_dataframe)  # noqa: SLF001
 
     expected_avg = np.mean([10.0, 20.0])
 
@@ -236,7 +236,7 @@ def test_aggregate_bond_energy_empty_list(
     df = mock_dataframe.copy()
     df.at[0, "bond_energy"] = []
 
-    df_out = engineer._aggregate_bond_energy(df)  # noqa: SLF001
+    df_out = engineer._aggregate_interaction_features(df)  # noqa: SLF001
 
     assert df_out.loc[0, "avg_bond_energy"] == 0.0
     assert df_out.loc[0, "num_heavy_H_bonds"] == 0.0

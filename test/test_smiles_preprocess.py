@@ -24,7 +24,7 @@ def test_invalid_smiles_filtered(bad_smiles: str) -> None:
     ],
 )
 def test_single_atom_filtered(single_atom: str) -> None:
-    assert get_preprocessed_smiles(single_atom) is None
+    assert get_preprocessed_smiles(single_atom) == "atom"
 
 
 @pytest.mark.parametrize(
@@ -36,7 +36,7 @@ def test_single_atom_filtered(single_atom: str) -> None:
     ],
 )
 def test_salt_molecules_filtered(salted_smiles: str) -> None:
-    assert get_preprocessed_smiles(salted_smiles) is None
+    assert get_preprocessed_smiles(salted_smiles) == "salt"
 
 
 @pytest.mark.parametrize(

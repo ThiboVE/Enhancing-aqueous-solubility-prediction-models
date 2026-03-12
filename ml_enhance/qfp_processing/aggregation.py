@@ -28,11 +28,14 @@ class ConformerAggregator:
         boltzmann_factors = np.exp(-delta_G / (self.k_B * self.temperature))
         weights = boltzmann_factors / boltzmann_factors.sum()
 
+        numeric_cols = df.select_dtypes(include=["float64", "int64"]).columns
+        numeric_matrix = df[numeric_cols].to_numpy()  # shape: (n_conformers, n_features)
+
+        averages = np.einsum("i,ij->j", weights, numeric_matrix)  # shape: (n_features,)
+
         result = {"smiles": df["original_smiles"].iloc[0]}
 
-        float_cols = df.select_dtypes(include=["float64", "int64"]).columns
-        for col in float_cols:
-            average = np.dot(weights, df[col].to_numpy())
-            result[col] = average.astype("int64") if df[col].dtype == "Int64" else average.astype("float64")
+        result = dict(zip(numeric_cols, averages, strict=True))
+        result["smiles"] = df["original_smiles"].iloc[0]
 
         return pd.Series(result)
