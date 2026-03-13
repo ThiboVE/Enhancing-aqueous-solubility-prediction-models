@@ -38,39 +38,43 @@ class QuantumFPDatasetBuilder:
         return [self.build_single_molecule(file) for file in files_batch]
 
     def build_dataset(
-        self, cap: int | None = None, *, multiprocess: bool = False, n_jobs: int = 4
+        self,
+        *,
+        files_list: list[Path] | None = None,
+        multiprocess: bool = True,
+        n_jobs: int = 4,
     ) -> tuple[pd.DataFrame, list[Path]]:
         """Stream-process all molecules and assemble final dataset."""
-        output_files = self.loader.list_output_files()
-
-        output_files = output_files[:cap] if cap is not None else output_files
+        if files_list is None:
+            files_list = self.loader.list_output_files()
 
         results = (
-            parallelize(self.build_single_molecule, output_files, n_jobs=n_jobs)
+            parallelize(self.build_single_molecule, files_list, n_jobs=n_jobs)
             if multiprocess
-            else [self.build_single_molecule(file) for file in output_files]
+            else [self.build_single_molecule(file) for file in files_list]
         )
 
         molecule_rows: list[pd.Series] = []
         error_files: list[Path] = []
         for idx, result in enumerate(results):
             if result is None:
-                error_files.append(output_files[idx])
+                error_files.append(files_list[idx])
             else:
                 molecule_rows.append(result)
 
         return pd.DataFrame(molecule_rows), error_files
 
     def build_dataset_batched(
-        self, *, n_jobs: int = 4, batch_size: int | None = None
+        self, *, files_list: list[Path] | None = None, n_jobs: int = 4, batch_size: int | None = None
     ) -> tuple[pd.DataFrame, list[Path]]:
-        output_files = self.loader.list_output_files()
-        n_files = len(output_files)
+        if files_list is None:
+            files_list = self.loader.list_output_files()
+        n_files = len(files_list)
 
         if batch_size is None:
             batch_size = max(1, n_files // (n_jobs * 5))
 
-        batches = [output_files[i : i + batch_size] for i in range(0, n_files, batch_size)]
+        batches = [files_list[i : i + batch_size] for i in range(0, n_files, batch_size)]
 
         batch_results = parallelize(self.build_batch, batches, n_jobs=n_jobs)
 
@@ -78,7 +82,7 @@ class QuantumFPDatasetBuilder:
         error_files: list[Path] = []
         for idx, result in enumerate(batch_results):
             if result is None:
-                error_files.append(output_files[idx])
+                error_files.append(files_list[idx])
             else:
                 molecule_rows.append(result)
 
