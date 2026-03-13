@@ -89,14 +89,14 @@ class QFPFeatureEngineer:
         - 1500-2750
         - 2750-4000
         """
-        new_features_list = []
+        new_features_list: list[dict[str, float]] = []
 
         bins = [0, 1500, 2750, 4000]
         freq_labels = ["1500", "1500_2750", "2750_4000"]
 
         for freq_list, intensity_list in zip(df["normal_mode_frequencies"], df["infrared_intensity"], strict=True):
-            freqs = np.array(freq_list)
-            intensities = np.array(intensity_list)
+            freqs: np.ndarray[float] = np.array(freq_list)
+            intensities: np.ndarray[float] = np.array(intensity_list)
 
             # Keep only physical frequencies (MARK: TODO: maybe take imaginary freqs into account one way or another)
             mask: np.ndarray[bool] = (freqs >= 0) & (freqs <= 4000)
@@ -122,7 +122,7 @@ class QFPFeatureEngineer:
 
             new_features_list.append(feature_dict)
 
-        new_features = pd.DataFrame(new_features_list).astype("Float64")
+        new_features = pd.DataFrame(new_features_list).astype("float64")
 
         # Concatenate with original dataframe
         df = pd.concat([df.reset_index(drop=True), new_features], axis=1)
@@ -135,7 +135,10 @@ class QFPFeatureEngineer:
         )
 
     def _aggregate_list_features(
-        self, df: pd.DataFrame, feature_set: Iterable[str], value_extract_function: Callable
+        self,
+        df: pd.DataFrame,
+        feature_set: Iterable[str],
+        value_extract_function: Callable[[list[list[int | float]]], list[float]],
     ) -> pd.DataFrame:
         for feature in feature_set:
             floats_only = df[feature].apply(value_extract_function)
@@ -190,7 +193,7 @@ class QFPFeatureEngineer:
         )
 
     def _aggregate_interaction_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        interaction_features = {
+        interaction_features = [
             "bond_length",
             "bond_stiffness",
             "bond_energy",
@@ -199,7 +202,7 @@ class QFPFeatureEngineer:
             "atomic_charge_dipole_interaction",
             "atomic_charge_quadrupole_interaction",
             "atomic_dipole_dipole_interaction",
-        }
+        ]
 
         new_df = self._aggregate_list_features(df, interaction_features, self.interaction_value_extract_fn)
 
@@ -214,11 +217,11 @@ class QFPFeatureEngineer:
         )
 
     @staticmethod
-    def atomic_value_extract_fn(lst: list[list[int, float]]) -> list[float]:
+    def atomic_value_extract_fn(lst: list[list[int | float]]) -> list[float]:
         return [t[1] for t in lst]
 
     @staticmethod
-    def interaction_value_extract_fn(lst: list[list[int, int, float]]) -> list[float]:
+    def interaction_value_extract_fn(lst: list[list[int | float]]) -> list[float]:
         return [inner[-1] for inner in lst] if lst else [0.0]
 
     @staticmethod
