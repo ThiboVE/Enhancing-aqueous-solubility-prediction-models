@@ -10,8 +10,6 @@ from ml_enhance.qfp_processing import (
     QuantumFPDatasetBuilder,
     QuantumFPFileLoader,
     RDKitFeatureCalculator,
-    centroid_freq,
-    norm_intensity,
 )
 
 __all__ = [
@@ -22,11 +20,9 @@ __all__ = [
     "QuantumFPFileLoader",
     "RDKitFeatureCalculator",
     "canonicalize_smiles",
-    "centroid_freq",
     "get_preprocessed_smiles",
     "is_atom",
     "is_salt",
-    "norm_intensity",
     "parallelize",
     "plot_scaled_linreg_result",
     "set_atom_map_numbers",

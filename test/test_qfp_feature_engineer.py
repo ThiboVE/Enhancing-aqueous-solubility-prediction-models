@@ -179,15 +179,15 @@ def test_aggregate_atomic_features(mock_dataframe: pd.DataFrame) -> None:
 
     # Compute expected averages manually for first row
     expected_avg_effective_coordination_number = np.mean([2.0, 1.0])
-    expected_avg_partial_charge = np.mean([-0.2, 0.1])
+    expected_avg_atomic_sasa = np.mean([12, 14])
 
     assert df_out.loc[0, "avg_effective_coordination_number"] == pytest.approx(
         expected_avg_effective_coordination_number
     )
-    assert df_out.loc[0, "avg_partial_charge"] == pytest.approx(expected_avg_partial_charge)
+    assert df_out.loc[0, "avg_atomic_sasa"] == pytest.approx(expected_avg_atomic_sasa)
 
     # Original columns removed
-    for col in ["effective_coordination_number", "partial_charge"]:
+    for col in ["effective_coordination_number", "atomic_sasa"]:
         assert col not in df_out.columns
 
 

@@ -33,7 +33,7 @@ class QuantumFPDatasetBuilder:
         else:
             return mol_features
 
-    def build_batch(self, files_batch: list[Path]) -> list[pd.Series, None]:
+    def build_batch(self, files_batch: list[Path]) -> list[pd.Series | None]:
         """Process a batch of molecules and return a list of feature Series."""
         return [self.build_single_molecule(file) for file in files_batch]
 
@@ -48,7 +48,7 @@ class QuantumFPDatasetBuilder:
         if files_list is None:
             files_list = self.loader.list_output_files()
 
-        results = (
+        results: list[pd.Series | None] = (
             parallelize(self.build_single_molecule, files_list, n_jobs=n_jobs)
             if multiprocess
             else [self.build_single_molecule(file) for file in files_list]
@@ -74,19 +74,20 @@ class QuantumFPDatasetBuilder:
         if batch_size is None:
             batch_size = max(1, n_files // (n_jobs * 5))
 
-        batches = [files_list[i : i + batch_size] for i in range(0, n_files, batch_size)]
+        batches: list[list[Path]] = [files_list[i : i + batch_size] for i in range(0, n_files, batch_size)]
 
-        batch_results = parallelize(self.build_batch, batches, n_jobs=n_jobs)
+        batch_results: list[list[pd.Series | None]] = parallelize(self.build_batch, batches, n_jobs=n_jobs)
 
         molecule_rows: list[pd.Series] = []
         error_files: list[Path] = []
-        for idx, result in enumerate(batch_results):
-            if result is None:
-                error_files.append(files_list[idx])
-            else:
-                molecule_rows.append(result)
+        for idx, results in enumerate(batch_results):
+            for jdx, result in enumerate(results):
+                if result is None:
+                    error_files.append(files_list[idx * batch_size + jdx])
+                else:
+                    molecule_rows.append(result)
 
-        return pd.DataFrame.from_records(molecule_rows), error_files
+        return pd.DataFrame(molecule_rows), error_files
 
     def _stream_dataset(self, *, clean: bool = True) -> Generator[pd.Series]:
         """Fully streaming version.

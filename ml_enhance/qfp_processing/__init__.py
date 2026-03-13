@@ -6,11 +6,7 @@ from quantum fingerprint data, including dataset building and RDKit feature calc
 
 from ml_enhance.qfp_processing.aggregation import ConformerAggregator
 from ml_enhance.qfp_processing.dataset_builder import QuantumFPDatasetBuilder
-from ml_enhance.qfp_processing.feature_engineering import (
-    QFPFeatureEngineer,
-    centroid_freq,
-    norm_intensity,
-)
+from ml_enhance.qfp_processing.feature_engineering import QFPFeatureEngineer
 from ml_enhance.qfp_processing.file_loader import QuantumFPFileLoader
 from ml_enhance.qfp_processing.rdkit_feature_calculator import RDKitFeatureCalculator
 
@@ -20,6 +16,4 @@ __all__ = [
     "QuantumFPDatasetBuilder",
     "QuantumFPFileLoader",
     "RDKitFeatureCalculator",
-    "centroid_freq",
-    "norm_intensity",
 ]
