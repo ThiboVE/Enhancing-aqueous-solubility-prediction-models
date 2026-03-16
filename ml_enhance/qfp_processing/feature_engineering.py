@@ -65,7 +65,7 @@ class QFPFeatureEngineer:
         return df.drop(thermodynamic_features, axis=1, errors="ignore")
 
     def _process_energy_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        energy_features = ["energy", "gibbs_free_energy_300K"]
+        energy_features = ["energy", "gibbs_free_energy_300K", "enthalpy", "entropy_300K", "heat_capacity_300K"]
 
         for feature in energy_features:
             values = df[feature].to_numpy()
@@ -80,7 +80,7 @@ class QFPFeatureEngineer:
 
         df["rigid_flag"] = 1 if df["energy"].max() == df["energy"].min() else 0
 
-        return df.drop("energy", axis=1)
+        return df.drop(["energy", "enthalpy", "entropy_300K", "heat_capacity_300K"], axis=1)
 
     def _aggregate_ir_regions(self, df: pd.DataFrame) -> pd.DataFrame:
         """Aggregate IR frequencies and intensities into defined regions.
