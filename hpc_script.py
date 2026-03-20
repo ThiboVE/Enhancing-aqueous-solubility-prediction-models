@@ -11,7 +11,7 @@ from sklearn.base import BaseEstimator, clone
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.linear_model import HuberRegressor
 from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.model_selection import BaseCrossValidator, KFold
+from sklearn.model_selection import BaseCrossValidator, GridSearchCV, KFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PowerTransformer, StandardScaler
 
@@ -162,19 +162,24 @@ def main() -> None:
 
     outer_kf = KFold(n_splits=5, shuffle=True, random_state=42)
 
-    model = Pipeline(
+    pl_huber = Pipeline(
         [
             ("variance", VarianceThreshold(threshold=0.0)),
             ("remove_corr", CorrelationFilter(threshold=0.95)),
             ("transform", PowerTransformer(method="yeo-johnson", standardize=False)),
             ("scale", StandardScaler()),
-            ("predict", HuberRegressor(epsilon=2.0, alpha=0.01, max_iter=1000)),
+            # ("predict", HuberRegressor(epsilon=2.0, alpha=0.01, max_iter=1000)),
+            ("predict", HuberRegressor(max_iter=1000)),
         ]
     )
 
+    param_grid = {"predict__epsilon": [1.1, 1.35, 1.5, 2.0], "predict__alpha": [1e-5, 1e-4, 1e-3, 1e-2]}
+
+    grid = GridSearchCV(estimator=pl_huber, param_grid=param_grid, cv=inner_kf, scoring="r2", n_jobs=1)
+
     begin_time = time.time()
 
-    scores: dict[str, Any] = custom_cross_validate(model, X, y, outer_kf, logger)
+    scores: dict[str, Any] = custom_cross_validate(grid, X, y, outer_kf, logger)
 
     logger.info(f"Calculation finished in {time.time() - begin_time}s")
 

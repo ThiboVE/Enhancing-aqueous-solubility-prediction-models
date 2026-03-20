@@ -2,6 +2,7 @@
 
 from ml_enhance.correlation_filter import CorrelationFilter
 from ml_enhance.general_functions import canonicalize_smiles, parallelize
+from ml_enhance.JSONparser import NumpyJSONCache
 from ml_enhance.model_analysis import StatisticalComparison, plot_scaled_linreg_result
 from ml_enhance.preprocess_smiles import get_preprocessed_smiles, is_atom, is_salt, set_atom_map_numbers
 from ml_enhance.qfp_processing import (
@@ -15,6 +16,7 @@ from ml_enhance.qfp_processing import (
 __all__ = [
     "ConformerAggregator",
     "CorrelationFilter",
+    "NumpyJSONCache",
     "QFPFeatureEngineer",
     "QuantumFPDatasetBuilder",
     "QuantumFPFileLoader",
