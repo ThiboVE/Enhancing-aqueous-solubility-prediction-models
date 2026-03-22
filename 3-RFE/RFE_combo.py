@@ -25,7 +25,7 @@ class CorrelationFilter(BaseEstimator, TransformerMixin):
 
     def __init__(self, threshold: float = 1.0) -> None:
         self.threshold: float = threshold
-        self.to_drop_: list[str] | None = None
+        self.to_drop_: Iterable[str] | None = None
 
     def fit(self, X: pd.DataFrame, y: pd.Series | None = None) -> Self:
         if isinstance(X, pd.DataFrame):
