@@ -12,7 +12,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_selection import RFECV, VarianceThreshold
 from sklearn.linear_model import HuberRegressor
 from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.model_selection import GridSearchCV, KFold
+from sklearn.model_selection import KFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PowerTransformer, StandardScaler
 
@@ -179,6 +179,8 @@ def filter_X(X: pd.DataFrame) -> pd.DataFrame:
 def main() -> None:
     fold_id = int(sys.argv[1])
 
+    n_cpus = 5
+
     BASE: Path = Path(__file__).parent
     file_name: str = Path(__file__).stem + f"_{fold_id}"
 
@@ -195,23 +197,24 @@ def main() -> None:
             ("remove_corr", CorrelationFilter(threshold=0.95)),
             ("transform", PowerTransformer(method="yeo-johnson", standardize=False)),
             ("scale", StandardScaler()),
-            ("predict", HuberRegressor(max_iter=1000)),
+            ("predict", HuberRegressor(epsilon=2.0, alpha=0.01, max_iter=1000)),
         ]
     )
 
-    gridsearch_kf = KFold(n_splits=5, shuffle=True, random_state=42)
+    # gridsearch_kf = KFold(n_splits=5, shuffle=True, random_state=42)
     rfe_kf = KFold(n_splits=5, shuffle=True, random_state=40)
 
-    param_grid = {
-        "estimator__predict__epsilon": [1.1, 1.35, 1.5, 2.0],
-        "estimator__predict__alpha": [1e-5, 1e-4, 1e-3, 1e-2],
-    }
+    # param_grid = {
+    #     "estimator__predict__epsilon": [1.1, 1.35, 1.5, 2.0],
+    #     "estimator__predict__alpha": [1e-5, 1e-4, 1e-3, 1e-2],
+    # }
 
-    rfe = RFECV(
-        pl_huber, cv=rfe_kf, scoring="r2", n_jobs=1, importance_getter=lambda est: est.named_steps["predict"].coef_
-    )
+    def get_coef(esimator):
+        return estimator.named_steps["predict"].coef_
 
-    search = GridSearchCV(estimator=rfe, param_grid=param_grid, cv=gridsearch_kf, scoring="r2", n_jobs=1)
+    rfe = RFECV(pl_huber, cv=rfe_kf, scoring="r2", n_jobs=n_cpus, importance_getter=get_coef, verbose=12)
+
+    # search = GridSearchCV(estimator=rfe, param_grid=param_grid, cv=gridsearch_kf, scoring="r2", n_jobs=1, verbose=12)
 
     df = pd.read_csv(df_file)
     X = df.drop(["solubility", "smiles", "canon_smiles", "id"], axis=1)
@@ -222,7 +225,7 @@ def main() -> None:
 
     begin_time = time.time()
 
-    scores: dict[str, Any] = process_fold(X_train, X_test, y_train, y_test, search, logger=logger)
+    scores: dict[str, Any] = process_fold(X_train, X_test, y_train, y_test, rfe, logger=logger)
 
     logger.info(f"Calculation finished in {time.time() - begin_time}s")
 
