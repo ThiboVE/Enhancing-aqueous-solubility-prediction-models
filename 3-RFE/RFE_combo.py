@@ -209,7 +209,7 @@ def main() -> None:
     #     "estimator__predict__alpha": [1e-5, 1e-4, 1e-3, 1e-2],
     # }
 
-    def get_coef(esimator):
+    def get_coef(estimator: BaseEstimator) -> np.ndarray:
         return estimator.named_steps["predict"].coef_
 
     rfe = RFECV(pl_huber, cv=rfe_kf, scoring="r2", n_jobs=n_cpus, importance_getter=get_coef, verbose=12)
