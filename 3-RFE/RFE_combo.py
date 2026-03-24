@@ -150,7 +150,7 @@ def save_results(results: dict[str, Any], file: Path) -> None:
         pickle.dump(results, f)
 
 
-def train_test_split(
+def custom_train_test_split(
     splits_file: Path, fold_id: int, X: pd.DataFrame, y: pd.Series
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     with splits_file.open("rb") as f:
@@ -174,6 +174,10 @@ def filter_X(X: pd.DataFrame) -> pd.DataFrame:
         ],
         axis=1,
     )
+
+
+def get_coef(estimator: BaseEstimator) -> np.ndarray:
+    return estimator.named_steps["predict"].coef_
 
 
 def main() -> None:
@@ -209,19 +213,16 @@ def main() -> None:
     #     "estimator__predict__alpha": [1e-5, 1e-4, 1e-3, 1e-2],
     # }
 
-    def get_coef(estimator: BaseEstimator) -> np.ndarray:
-        return estimator.named_steps["predict"].coef_
-
     rfe = RFECV(pl_huber, cv=rfe_kf, scoring="r2", n_jobs=n_cpus, importance_getter=get_coef, verbose=12)
 
     # search = GridSearchCV(estimator=rfe, param_grid=param_grid, cv=gridsearch_kf, scoring="r2", n_jobs=1, verbose=12)
 
     df = pd.read_csv(df_file)
     X = df.drop(["solubility", "smiles", "canon_smiles", "id"], axis=1)
-    X = filter_X(X)
+    X_filtered = filter_X(X)
     y = df["solubility"]
 
-    X_train, X_test, y_train, y_test = train_test_split(splits_file, fold_id, X, y)
+    X_train, X_test, y_train, y_test = custom_train_test_split(splits_file, fold_id, X_filtered, y)
 
     begin_time = time.time()
 

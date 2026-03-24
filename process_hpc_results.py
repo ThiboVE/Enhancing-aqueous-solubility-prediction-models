@@ -44,6 +44,10 @@ def save_combined(combined_data: dict[str, np.ndarray[Any]], path: Path) -> None
         pickle.dump(combined_data, f)
 
 
+def get_coef(estimator: BaseEstimator) -> np.ndarray:
+    return estimator.named_steps["predict"].coef_
+
+
 def main() -> None:
     files_path: Path = Path(str(sys.argv[1]))
     base: Path = files_path.parent
