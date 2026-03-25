@@ -1,6 +1,8 @@
 """Module containing general functions that are used throughout the project."""
 
+import json
 from _collections_abc import Callable, Iterable
+from pathlib import Path
 from typing import Any
 
 from joblib import Parallel, delayed
@@ -45,3 +47,14 @@ def canonicalize_smiles(smiles: str) -> str | None:
         atom.SetAtomMapNum(0)
 
     return Chem.MolToSmiles(mol, canonical=True)
+
+
+def get_topology_features() -> list[str]:
+    BASE = Path(__file__).resolve().parent.parent
+
+    feature_path = BASE / "data" / "rdkit_feature_names.json"
+
+    assert feature_path.exists(), "Feature path is wrong."
+
+    with feature_path.open("r") as f:
+        return json.load(f)

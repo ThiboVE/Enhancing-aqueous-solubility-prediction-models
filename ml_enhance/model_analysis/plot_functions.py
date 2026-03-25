@@ -6,6 +6,8 @@ import pandas as pd
 from matplotlib.patches import Patch
 from sklearn.pipeline import Pipeline
 
+from ml_enhance import get_topology_features
+
 
 class PlotOptions(NamedTuple):
     """NamedTuple for storing the settings of the plot_scaled_linreg_result function.
@@ -74,13 +76,15 @@ def plot_scaled_linreg_result(
 
 
 def plot_FI(FI_data: pd.Series, num_features: int, *, save_fig: bool = False, color: str = "tab:blue") -> None:
-    FI_data_sorted = FI_data.abs().sort_values(ascending=False)
+    FI_data_sorted = FI_data.abs().sort_values(ascending=False)[:num_features]
 
-    colors = [color if feature in X_qm.columns else "grey" for feature in FI_data_sorted.index]
-    alphas = [1 if feature in X_qm.columns else 0.6 for feature in FI_data_sorted.index]
+    topology_features: list[str] = get_topology_features()
+
+    colors = [color if feature not in topology_features else "grey" for feature in FI_data_sorted.index]
+    alphas = [1 if feature not in topology_features else 0.6 for feature in FI_data_sorted.index]
 
     plt.figure(figsize=(8, 6))
-    bars = plt.barh(FI_data_sorted.index[:num_features], FI_data_sorted.to_numpy()[:num_features], color=colors)
+    bars = plt.barh(FI_data_sorted.index, FI_data_sorted.to_numpy(), color=colors)
 
     for bar, alpha in zip(bars, alphas, strict=True):
         bar.set_alpha(alpha)
@@ -95,7 +99,7 @@ def plot_FI(FI_data: pd.Series, num_features: int, *, save_fig: bool = False, co
 
     for tick in yticks:
         tick.set_size(12)
-        if tick.get_text() in X_qm.columns:
+        if tick.get_text() not in topology_features:
             tick.set_fontweight("bold")
             tick.set_color(color)
 
