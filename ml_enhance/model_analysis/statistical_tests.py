@@ -9,8 +9,8 @@ class StatisticalComparison:
         if model1_scores.shape != model2_scores.shape:
             raise ValueError("scores1 and scores2 must have the same shape")
 
-        self.scores1 = model1_scores
-        self.scores2 = model2_scores
+        self.scores1 = np.abs(model1_scores)
+        self.scores2 = np.abs(model2_scores)
 
     def wilcoxon_fold_differences(self) -> dict[str, float]:
         """Compute Wilcoxon signed-rank test for fold-wise differences.
