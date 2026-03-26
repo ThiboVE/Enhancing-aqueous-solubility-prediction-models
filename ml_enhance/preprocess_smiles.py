@@ -59,8 +59,15 @@ def get_preprocessed_smiles(smiles: str) -> str | None:
     """
     mol = Chem.MolFromSmiles(smiles)
 
-    if mol is None or is_salt(mol) or is_atom(mol):
+    # if mol is None or is_salt(mol) or is_atom(mol):
+    if mol is None:
         return None
+
+    if is_salt(mol):
+        return "salt"
+
+    if is_atom(mol):
+        return "atom"
 
     mol_with_H = Chem.AddHs(mol)
 

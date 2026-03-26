@@ -179,15 +179,15 @@ def test_aggregate_atomic_features(mock_dataframe: pd.DataFrame) -> None:
 
     # Compute expected averages manually for first row
     expected_avg_effective_coordination_number = np.mean([2.0, 1.0])
-    expected_avg_partial_charge = np.mean([-0.2, 0.1])
+    expected_avg_atomic_sasa = np.mean([12, 14])
 
     assert df_out.loc[0, "avg_effective_coordination_number"] == pytest.approx(
         expected_avg_effective_coordination_number
     )
-    assert df_out.loc[0, "avg_partial_charge"] == pytest.approx(expected_avg_partial_charge)
+    assert df_out.loc[0, "avg_atomic_sasa"] == pytest.approx(expected_avg_atomic_sasa)
 
     # Original columns removed
-    for col in ["effective_coordination_number", "partial_charge"]:
+    for col in ["effective_coordination_number", "atomic_sasa"]:
         assert col not in df_out.columns
 
 
@@ -216,7 +216,7 @@ def test_aggregate_interaction_features(mock_dataframe: pd.DataFrame) -> None:
 def test_aggregate_bond_energy(mock_dataframe: pd.DataFrame) -> None:
     engineer = QFPFeatureEngineer(temperature=300)
 
-    df_out = engineer._aggregate_bond_energy(mock_dataframe)  # noqa: SLF001
+    df_out = engineer._aggregate_interaction_features(mock_dataframe)  # noqa: SLF001
 
     expected_avg = np.mean([10.0, 20.0])
 
@@ -236,7 +236,7 @@ def test_aggregate_bond_energy_empty_list(
     df = mock_dataframe.copy()
     df.at[0, "bond_energy"] = []
 
-    df_out = engineer._aggregate_bond_energy(df)  # noqa: SLF001
+    df_out = engineer._aggregate_interaction_features(df)  # noqa: SLF001
 
     assert df_out.loc[0, "avg_bond_energy"] == 0.0
     assert df_out.loc[0, "num_heavy_H_bonds"] == 0.0

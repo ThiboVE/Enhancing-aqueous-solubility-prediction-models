@@ -1,0 +1,71 @@
+import numpy as np
+from scipy import stats
+
+
+class StatisticalComparison:
+    """Class that encompasses statistical methods to compare two different models."""
+
+    def __init__(self, model1_scores: np.ndarray, model2_scores: np.ndarray) -> None:
+        if model1_scores.shape != model2_scores.shape:
+            raise ValueError("scores1 and scores2 must have the same shape")
+
+        self.scores1 = np.abs(model1_scores)
+        self.scores2 = np.abs(model2_scores)
+
+    def wilcoxon_fold_differences(self) -> dict[str, float]:
+        """Compute Wilcoxon signed-rank test for fold-wise differences.
+
+        Parameters
+        ----------
+        None
+
+        Returns:
+        -------
+        dict with keys:
+            'wilcoxon_stat' : Wilcoxon signed-rank statistic
+            'p_value_w' : two-sided p-value
+            'mean_diff' : mean difference across folds
+        """
+        fold_diffs: np.ndarray = self.scores1 - self.scores2
+        mean_diff: float = np.mean(fold_diffs)
+
+        wilcoxon_stat, p_value_w = stats.wilcoxon(fold_diffs)
+
+        return {"wilcoxon_stat": wilcoxon_stat, "p_value_w": p_value_w, "mean_diff": mean_diff}
+
+    def nadeau_bengio_corrected_t_test(self, n_train: int, n_test: int) -> dict[str, float]:
+        """Compute Nadeau & Bengio (2003) corrected paired t-test for repeated k-fold CV.
+
+        Parameters:
+        -----------
+        n_train : int
+            Number of training samples in each fold.
+        n_test : int
+            Number of test samples in each fold.
+
+        Returns:
+        --------
+        t_stat : float
+            Corrected t-statistic.
+        p_value : float
+            Two-sided p-value.
+        mean_diff : float
+            Mean difference of scores1 - scores2.
+        """
+        # Fold-wise differences
+        d: np.ndarray = self.scores1 - self.scores2
+        mean_diff = np.mean(d)
+        var_d = np.var(d, ddof=1)
+
+        # Nadeau & Bengio corrected variance
+        n_folds = len(d)
+        corrected_var = var_d / n_folds * (1 + n_test / n_train)
+
+        # Corrected t-statistic
+        t_stat = mean_diff / np.sqrt(corrected_var)
+
+        # Degrees of freedom
+        df = n_folds - 1
+        p_value = 2 * (1 - stats.t.cdf(np.abs(t_stat), df=df))
+
+        return {"t_stat": t_stat, "p_value": p_value, "mean_diff": mean_diff}

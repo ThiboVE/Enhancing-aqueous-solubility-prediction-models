@@ -5,6 +5,8 @@ including IR region aggregation, atomic feature aggregation, and interaction
 feature aggregation for molecular property prediction.
 """
 
+from collections.abc import Callable, Iterable
+
 import numpy as np
 import pandas as pd
 
@@ -17,12 +19,15 @@ class QFPFeatureEngineer:
 
     def clean_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Public entry point for conformer-level feature processing."""
-        df = self._remove_tensor_features(df)
-        df = self._select_thermodynamic_features(df)
-        df = self._aggregate_ir_regions(df)
-        df = self._aggregate_atomic_features(df)
-        df = self._aggregate_interaction_features(df)
-        return self._aggregate_bond_energy(df)
+        return (
+            df.pipe(self._remove_tensor_features)
+            .pipe(self._select_thermodynamic_features)
+            .pipe(self._process_energy_features)
+            .pipe(self._aggregate_ir_regions)
+            .pipe(self._aggregate_atomic_features)
+            .pipe(self._process_atomic_features_wo_avg)
+            .pipe(self._aggregate_interaction_features)
+        )
 
     def _remove_tensor_features(self, df: pd.DataFrame) -> pd.DataFrame:
         features_to_remove = [
@@ -55,9 +60,27 @@ class QFPFeatureEngineer:
             return None
 
         for feature in thermodynamic_features:
-            df[f"{feature}_{int(self.temperature)}K"] = df[feature].apply(get_val_at_T).astype("Float64")
+            df[f"{feature}_{int(self.temperature)}K"] = df[feature].apply(get_val_at_T).astype("float64")
 
         return df.drop(thermodynamic_features, axis=1, errors="ignore")
+
+    def _process_energy_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        energy_features = ["energy", "gibbs_free_energy_300K", "enthalpy", "entropy_300K", "heat_capacity_300K"]
+
+        for feature in energy_features:
+            values = df[feature].to_numpy()
+
+            min_val = values.min()
+            max_val = values.max()
+            std_val = values.std()
+
+            df[f"delta_{feature}"] = values - min_val
+            df[f"{feature}_range"] = max_val - min_val
+            df[f"std_{feature}"] = std_val
+
+        df["rigid_flag"] = 1 if df["energy"].max() == df["energy"].min() else 0
+
+        return df.drop(["energy", "enthalpy", "entropy_300K", "heat_capacity_300K"], axis=1)
 
     def _aggregate_ir_regions(self, df: pd.DataFrame) -> pd.DataFrame:
         """Aggregate IR frequencies and intensities into defined regions.
@@ -66,14 +89,14 @@ class QFPFeatureEngineer:
         - 1500-2750
         - 2750-4000
         """
-        new_features_list = []
+        new_features_list: list[dict[str, float]] = []
 
         bins = [0, 1500, 2750, 4000]
         freq_labels = ["1500", "1500_2750", "2750_4000"]
 
         for freq_list, intensity_list in zip(df["normal_mode_frequencies"], df["infrared_intensity"], strict=True):
-            freqs = np.array(freq_list)
-            intensities = np.array(intensity_list)
+            freqs: np.ndarray[float] = np.array(freq_list)
+            intensities: np.ndarray[float] = np.array(intensity_list)
 
             # Keep only physical frequencies (MARK: TODO: maybe take imaginary freqs into account one way or another)
             mask: np.ndarray[bool] = (freqs >= 0) & (freqs <= 4000)
@@ -91,13 +114,15 @@ class QFPFeatureEngineer:
                 feature_dict[f"ir_mode_count_{label}"] = len(idxs)
 
                 feature_dict[f"ir_centroid_freq_{label}"] = (
-                    centroid_freq(freqs, intensities, idxs) if len(idxs) > 0 else 0.0
+                    self.centroid_freq(freqs, intensities, idxs) if len(idxs) > 0 else 0.0
                 )
-                feature_dict[f"ir_norm_intensity_{label}"] = norm_intensity(intensities, idxs) if len(idxs) > 0 else 0.0
+                feature_dict[f"ir_norm_intensity_{label}"] = (
+                    self.norm_intensity(intensities, idxs) if len(idxs) > 0 else 0.0
+                )
 
             new_features_list.append(feature_dict)
 
-        new_features = pd.DataFrame(new_features_list).astype("Float64")
+        new_features = pd.DataFrame(new_features_list).astype("float64")
 
         # Concatenate with original dataframe
         df = pd.concat([df.reset_index(drop=True), new_features], axis=1)
@@ -109,15 +134,47 @@ class QFPFeatureEngineer:
             errors="ignore",
         )
 
-    def _aggregate_atomic_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Naive approach of just taking the average, later we can look into deviding per atom type."""
-        # MARK: TODO: split into atom types and average for each type
+    def _aggregate_list_features(
+        self,
+        df: pd.DataFrame,
+        feature_set: Iterable[str],
+        value_extract_function: Callable[[list[list[int | float]]], list[float]],
+    ) -> pd.DataFrame:
+        for feature in feature_set:
+            floats_only = df[feature].apply(value_extract_function)
+            exploded = floats_only.explode()
+            stats = exploded.groupby(level=0).agg(["mean", "min", "max", "std"])
+            stats = stats.fillna(0)
+            stats.columns = [f"avg_{feature}", f"min_{feature}", f"max_{feature}", f"std_{feature}"]
+            df = df.join(stats.astype("float64"))
 
-        atomic_features = {
-            "effective_coordination_number",
-            "partial_charge",
+        return df
+
+    def _process_atomic_features_wo_avg(self, df: pd.DataFrame) -> pd.DataFrame:
+        features = [
             "atomic_fukui_minus",
             "atomic_fukui_plus",
+            "partial_charge",
+            "partial_charge_water",
+            "partial_charge_thf",
+            "partial_charge_cyclohexane",
+            "partial_charge_dmso",
+        ]
+
+        new_df = self._aggregate_list_features(df, features, self.atomic_value_extract_fn)
+
+        avg_features = [
+            f"avg_{feature}" for feature in features
+        ]  # avg of atomic fukui charges is equal to 1 / N_atoms, avg of partial charge is often 0, so features provides little special information.
+
+        return new_df.drop(features + avg_features, axis=1, errors="ignore")
+
+    def _aggregate_atomic_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Naive approach of just taking the average, later we can look into dividing per atom type."""
+        # MARK: TODO: split into atom types and average for each type
+
+        atomic_features = [
+            "effective_coordination_number",
             "atomic_dipole_norm",
             "atomic_quadrupole_principal_invariant_2",
             "atomic_quadrupole_principal_invariant_3",
@@ -125,66 +182,54 @@ class QFPFeatureEngineer:
             "atomic_polarizability_anisotropy",
             "percentage_buried_volume",
             "atomic_sasa",
-            "partial_charge_water",
-            "partial_charge_thf",
-            "partial_charge_cyclohexane",
-            "partial_charge_dmso",
-        }
+        ]
 
-        for feature in atomic_features:
-            df[f"avg_{feature}"] = df[feature].apply(self.get_atomic_mean).astype("Float64")
+        new_df = self._aggregate_list_features(df, atomic_features, self.atomic_value_extract_fn)
 
-        return df.drop(
+        return new_df.drop(
             atomic_features,
             axis=1,
             errors="ignore",
         )
 
     def _aggregate_interaction_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        interaction_features = {
+        interaction_features = [
             "bond_length",
             "bond_stiffness",
+            "bond_energy",
             "overlap_integral",
             "nuclear_repulsion",
             "atomic_charge_dipole_interaction",
             "atomic_charge_quadrupole_interaction",
             "atomic_dipole_dipole_interaction",
-        }
+        ]
 
-        for feature in interaction_features:
-            df[f"avg_{feature}"] = df[feature].apply(self.get_interaction_mean).astype("Float64")
+        new_df = self._aggregate_list_features(df, interaction_features, self.interaction_value_extract_fn)
 
-        return df.drop(
+        new_df["num_heavy_H_bonds"] = (
+            new_df["bond_energy"].apply(len).astype("float64")
+        )  # deal with the case that there are no bond energies (absence of heavy atom-H bonds)
+
+        return new_df.drop(
             interaction_features,
             axis=1,
             errors="ignore",
         )
 
-    def _aggregate_bond_energy(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Specifically deal with the heavy atom-H bond energy.
+    @staticmethod
+    def atomic_value_extract_fn(lst: list[list[int | float]]) -> list[float]:
+        return [t[1] for t in lst]
 
-        This function also explicitly deals with the case that there are no bond energies (absence of heavy atom-H bonds).
-        """
-        df["avg_bond_energy"] = df["bond_energy"].apply(self.get_interaction_mean).astype("Float64")
+    @staticmethod
+    def interaction_value_extract_fn(lst: list[list[int | float]]) -> list[float]:
+        return [inner[-1] for inner in lst] if lst else [0.0]
 
-        df["num_heavy_H_bonds"] = df["bond_energy"].apply(len).astype("Float64")
+    @staticmethod
+    def centroid_freq(freqs: np.ndarray[float], intensities: np.ndarray[float], mask: np.ndarray[bool]) -> float:
+        r"""Region centroid frequency for a region: v_k,R = \frac{\\sum_{i \\in R} v_k,i I_k,i}{\\sum_{i \\in R} v_k,i}."""
+        return np.dot(freqs[mask], intensities[mask]) / intensities[mask].sum()
 
-        return df.drop(["bond_energy"], axis=1, errors="ignore")
-
-    def get_atomic_mean(self, atomic_feature: list[list[int, float]]) -> float:
-        """Helper function te get the mean of atomic features."""
-        return np.array([x[1] for x in atomic_feature]).mean()
-
-    def get_interaction_mean(self, interaction_feature: list[list[int, int, float]]) -> float:
-        """Helper function to get the mean of interaction features."""
-        return np.array([x[2] for x in interaction_feature]).mean() if len(interaction_feature) != 0 else 0
-
-
-def centroid_freq(freqs: np.ndarray[float], intensities: np.ndarray[float], mask: np.ndarray[bool]) -> float:
-    r"""Region centroid frequency for a region: v_k,R = \frac{\\sum_{i \\in R} v_k,i I_k,i}{\\sum_{i \\in R} v_k,i}."""
-    return np.dot(freqs[mask], intensities[mask]) / intensities[mask].sum()
-
-
-def norm_intensity(intensities: np.ndarray[float], mask: np.ndarray[bool]) -> float:
-    r"""Normalized intensity for a region: I_k,R = \frac{\\sum_{i \\in R} I_k,i}{\\sum_{i \\in all} I_k,i}."""
-    return intensities[mask].sum() / intensities.sum()
+    @staticmethod
+    def norm_intensity(intensities: np.ndarray[float], mask: np.ndarray[bool]) -> float:
+        r"""Normalized intensity for a region: I_k,R = \frac{\\sum_{i \\in R} I_k,i}{\\sum_{i \\in all} I_k,i}."""
+        return intensities[mask].sum() / intensities.sum()
