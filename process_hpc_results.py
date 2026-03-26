@@ -6,7 +6,10 @@ from typing import Any
 import numpy as np
 from sklearn.base import BaseEstimator
 
+import ml_enhance
 from ml_enhance import CorrelationFilter  # noqa: F401
+
+sys.modules["utils"] = ml_enhance
 
 
 def read_file(file: Path) -> dict[str, Any]:
@@ -52,7 +55,7 @@ def main() -> None:
     input_path: Path = Path(str(sys.argv[1]))
     output_file: Path = Path(str(sys.argv[2]))
 
-    output_file.mkdir(exist_ok=True)
+    output_file.parent.mkdir(exist_ok=True)
 
     files: list[Path] = [file for file in input_path.glob("**/*") if file.is_file()]
 
