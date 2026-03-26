@@ -49,16 +49,16 @@ def get_coef(estimator: BaseEstimator) -> np.ndarray:
 
 
 def main() -> None:
-    files_path: Path = Path(str(sys.argv[1]))
-    base: Path = files_path.parent
-    output_name = str(sys.argv[2])
-    result_file: Path = base / output_name
+    input_path: Path = Path(str(sys.argv[1]))
+    output_file: Path = Path(str(sys.argv[2]))
 
-    files: list[Path] = [file for file in files_path.glob("**/*") if file.is_file()]
+    output_file.mkdir(exist_ok=True)
+
+    files: list[Path] = [file for file in input_path.glob("**/*") if file.is_file()]
 
     combined_dict = group_files_data(files)
 
-    save_combined(combined_dict, result_file)
+    save_combined(combined_dict, output_file)
 
 
 if __name__ == "__main__":
