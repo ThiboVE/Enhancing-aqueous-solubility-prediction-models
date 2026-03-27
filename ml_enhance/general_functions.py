@@ -1,10 +1,12 @@
 """Module containing general functions that are used throughout the project."""
 
 import json
+import pickle
 from _collections_abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 from joblib import Parallel, delayed
 from rdkit import Chem
 from tqdm import tqdm
@@ -58,3 +60,10 @@ def get_topology_features() -> list[str]:
 
     with feature_path.open("r") as f:
         return json.load(f)
+
+
+def load_hpc_result(path: Path, name: str) -> pd.DataFrame:
+    with path.open("rb") as f:
+        df = pd.DataFrame(pickle.load(f))
+        df["name"] = name
+    return df
