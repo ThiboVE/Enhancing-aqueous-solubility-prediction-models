@@ -75,7 +75,23 @@ def plot_scaled_linreg_result(
     plt.show()
 
 
-def plot_FI(FI_data: pd.Series, num_features: int, *, save_fig: bool = False, color: str = "tab:blue") -> None:
+def plot_FI(
+    FI_data: pd.Series,
+    num_features: int,
+    *,
+    save_fig: bool = False,
+    fig_name: str | None = None,
+    color: str = "tab:blue",
+) -> None:
+    """Plot the feature importance.
+
+    params:
+        FI_data (pd.Series): A series containing feature importance values and having feature names as index
+        num_features (int): the top "n" features that are plotted
+        save_fig (bool): flag that tells the function whether the figure should be saved or not
+        fig_name (str): file name of the figure to be saved
+        color (str): name of the color used for the QM features
+    """
     FI_data_sorted = FI_data.abs().sort_values(ascending=False)[:num_features]
 
     topology_features: list[str] = get_topology_features()
@@ -114,6 +130,7 @@ def plot_FI(FI_data: pd.Series, num_features: int, *, save_fig: bool = False, co
     plt.tight_layout()
 
     if save_fig:
-        plt.savefig("HuberReg_FI.png", dpi=300)
+        assert fig_name is not None, "No name for the figure is provided."
+        plt.savefig(fig_name, dpi=300)
 
     plt.show()
