@@ -39,7 +39,7 @@ class FeatureImportance:
         weight_by_score: bool = False,
     ) -> pd.DataFrame:
         frequency: dict[str, int] = defaultdict(int)
-        importance_sum: dict[str, float] = defaultdict(float)
+        importance_dict: dict[str, list[float]] = defaultdict(list)
 
         for i, estimator in enumerate(self.df["estimator"]):
             model, features, support = self._unwrap_estimator(estimator)
@@ -63,24 +63,26 @@ class FeatureImportance:
                 raise ValueError("Unknown mode")
 
             weight: float = 1.0
-            if weight_by_score and "test_score" in self.df.columns:
-                weight = float(self.df.iloc[i]["test_score"])
+            if weight_by_score and "test_r2" in self.df.columns:
+                weight = float(self.df.iloc[i]["test_r2"])
 
             for feat in selected.index:
                 frequency[feat] += 1
-                importance_sum[feat] += fi_series[feat] * weight
+                importance_dict[feat].append(fi_series[feat] * weight)
 
         results: list[dict[str, float | str]] = [
             {
                 "feature": feat,
                 "frequency": frequency[feat] / self.n_outer_folds,
-                "mean_importance": importance_sum[feat] / frequency[feat],
+                "mean_importance": np.mean(importance_dict[feat]).astype(float),
+                "std_importance": np.std(importance_dict[feat]).astype(float),
             }
             for feat in frequency
         ]
 
         df = pd.DataFrame(results)
         df["score"] = df["frequency"] * df["mean_importance"].abs()
+        df["std_score"] = df["frequency"] * df["std_importance"].abs()
 
         self.fi_df = df.sort_values(by="score", ascending=False).reset_index(drop=True)
         return self.fi_df
@@ -113,14 +115,14 @@ class FeatureImportance:
         alphas = [1 if feature not in topology_features else 0.6 for feature in df["feature"]]
 
         plt.figure(figsize=(8, 6))
-        bars = plt.barh(df["feature"], df["score"].to_numpy(), color=colors)
+        bars = plt.barh(df["feature"], df["score"].to_numpy(), color=colors, xerr=df["std_score"].to_numpy(), capsize=3)
 
         for bar, alpha in zip(bars, alphas, strict=True):
             bar.set_alpha(alpha)
 
         legend_elements = [
-            Patch(facecolor=color, label="QM descriptor"),
-            Patch(facecolor="grey", label="Topological descriptor", alpha=0.6),
+            Patch(facecolor=color, label="QM feature"),
+            Patch(facecolor="grey", label="Topological feature", alpha=0.6),
         ]
 
         ax = plt.gca()
@@ -138,7 +140,7 @@ class FeatureImportance:
         plt.gca().spines["right"].set_visible(False)
 
         plt.xlabel("Weighted Feature importance", fontsize=16)
-        plt.title("Top 20 most important features", fontsize=16)
+        plt.title(f"Top {num_features} most important features", fontsize=16)
         plt.legend(handles=legend_elements, frameon=False, loc="lower right", fontsize=12)
         plt.tight_layout()
 
