@@ -21,12 +21,16 @@ class FeatureImportance:
     - Mean importance (when selected)
     """
 
-    def __init__(self, results_df: pd.DataFrame) -> None:
+    def __init__(
+        self, results_df: pd.DataFrame, *, includes_FI: bool = False, provided_FI: pd.Series | None = None
+    ) -> None:
         if "estimator" not in results_df.columns:
             raise ValueError("results_df must contain 'estimator' column")
 
         self.df: pd.DataFrame = results_df
         self.n_outer_folds: int = len(results_df)
+        self.includes_FI: bool = includes_FI
+        self.provided_FI: pd.Series = provided_FI
 
     # =========================
     # Public methods
@@ -42,19 +46,6 @@ class FeatureImportance:
         importance_dict: dict[str, list[float]] = defaultdict(list)
 
         for i, estimator in enumerate(self.df["estimator"]):
-            model, features, support = self._unwrap_estimator(estimator)
-
-            importances = self._get_importance(model)
-
-            if features is None:
-                features = np.array([f"f{j}" for j in range(len(importances))])
-
-            if support is not None:
-                # RFECV selected features only
-                features = features[support]
-
-            fi_series = pd.Series(importances, index=features)
-
             if mode == "two_stage":
                 selected = fi_series.abs().sort_values(ascending=False).head(num_features)
             elif mode == "full":
@@ -194,3 +185,20 @@ class FeatureImportance:
             return coef.ravel()
 
         raise ValueError(f"Model of type {type(model)} does not provide feature importance")
+
+    def _get_fi_series(self, estimator: BaseEstimator) -> pd.Series:
+        if self.includes_FI:
+            return self.provided_FI
+
+        model, features, support = self._unwrap_estimator(estimator)
+
+        importances = self._get_importance(model)
+
+        if features is None:
+            features = np.array([f"f{j}" for j in range(len(importances))])
+
+        if support is not None:
+            # RFECV selected features only
+            features = features[support]
+
+        return pd.Series(importances, index=features)
