@@ -22,19 +22,24 @@ class FeatureImportance:
     """
 
     def __init__(
-        self, results_df: pd.DataFrame, *, includes_FI: bool = False, provided_FI: pd.Series | None = None
+        self, results_df: pd.DataFrame, *, includes_FI: bool = False, provided_FI: dict[int, pd.Series] | None = None
     ) -> None:
         if "estimator" not in results_df.columns:
             raise ValueError("results_df must contain 'estimator' column")
 
+        if includes_FI and provided_FI is None:
+            print("WARNING: 'includes_FI' is set to True but no feature importance data was provided!")
+
         self.df: pd.DataFrame = results_df
         self.n_outer_folds: int = len(results_df)
         self.includes_FI: bool = includes_FI
-        self.provided_FI: pd.Series = provided_FI
+        self.provided_FI: dict[int, pd.Series] | None = provided_FI
 
-    # =========================
-    # Public methods
-    # =========================
+        if self.provided_FI is not None:
+            missing = set(self.df.index) - set(self.provided_FI.keys())
+            if missing:
+                raise ValueError(f"Missing FI for folds: {missing}")
+
     def get_feature_importance(
         self,
         num_features: int = 20,
@@ -45,7 +50,25 @@ class FeatureImportance:
         frequency: dict[str, int] = defaultdict(int)
         importance_dict: dict[str, list[float]] = defaultdict(list)
 
-        for i, estimator in enumerate(self.df["estimator"]):
+        for fold_id, row in self.df.iterrows():
+            if self.includes_FI and self.provided_FI is not None:
+                fi_series = self.provided_FI[fold_id]
+
+            else:
+                estimator = row["estimator"]
+                model, features, support = self._unwrap_estimator(estimator)
+
+                importances = self._get_importance(model)
+
+                if features is None:
+                    features = np.array([f"f{j}" for j in range(len(importances))])
+
+                if support is not None:
+                    # RFECV selected features only
+                    features = features[support]
+
+                fi_series = pd.Series(importances, index=features)
+
             if mode == "two_stage":
                 selected = fi_series.abs().sort_values(ascending=False).head(num_features)
             elif mode == "full":
@@ -54,8 +77,8 @@ class FeatureImportance:
                 raise ValueError("Unknown mode")
 
             weight: float = 1.0
-            if weight_by_score and "test_r2" in self.df.columns:
-                weight = float(self.df.iloc[i]["test_r2"])
+            if weight_by_score and "test_r2" in row.index:
+                weight = float(row["test_r2"])
 
             for feat in selected.index:
                 frequency[feat] += 1
@@ -141,9 +164,6 @@ class FeatureImportance:
 
         plt.show()
 
-    # =========================
-    # Helpers
-    # =========================
     def _unwrap_estimator(self, estimator: BaseEstimator) -> tuple[BaseEstimator, np.ndarray | None, np.ndarray | None]:
         """Returns:
 
@@ -185,20 +205,3 @@ class FeatureImportance:
             return coef.ravel()
 
         raise ValueError(f"Model of type {type(model)} does not provide feature importance")
-
-    def _get_fi_series(self, estimator: BaseEstimator) -> pd.Series:
-        if self.includes_FI:
-            return self.provided_FI
-
-        model, features, support = self._unwrap_estimator(estimator)
-
-        importances = self._get_importance(model)
-
-        if features is None:
-            features = np.array([f"f{j}" for j in range(len(importances))])
-
-        if support is not None:
-            # RFECV selected features only
-            features = features[support]
-
-        return pd.Series(importances, index=features)

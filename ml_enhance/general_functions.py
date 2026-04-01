@@ -62,8 +62,9 @@ def get_topology_features() -> list[str]:
         return json.load(f)
 
 
-def load_hpc_result(path: Path, name: str) -> pd.DataFrame:
+def load_hpc_result(path: Path, name: str | None = None) -> pd.DataFrame:
     with path.open("rb") as f:
         df = pd.DataFrame(pickle.load(f))
-        df["name"] = name
-    return df
+        if name is not None:
+            df["name"] = name
+        return df.set_index("fold_id")
