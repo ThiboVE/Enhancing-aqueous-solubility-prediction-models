@@ -21,18 +21,12 @@ class FeatureImportance:
     - Mean importance (when selected)
     """
 
-    def __init__(
-        self, results_df: pd.DataFrame, *, includes_FI: bool = False, provided_FI: dict[int, pd.Series] | None = None
-    ) -> None:
+    def __init__(self, results_df: pd.DataFrame, *, provided_FI: dict[int, pd.Series] | None = None) -> None:
         if "estimator" not in results_df.columns:
             raise ValueError("results_df must contain 'estimator' column")
 
-        if includes_FI and provided_FI is None:
-            print("WARNING: 'includes_FI' is set to True but no feature importance data was provided!")
-
         self.df: pd.DataFrame = results_df
         self.n_outer_folds: int = len(results_df)
-        self.includes_FI: bool = includes_FI
         self.provided_FI: dict[int, pd.Series] | None = provided_FI
 
         if self.provided_FI is not None:
@@ -51,7 +45,7 @@ class FeatureImportance:
         importance_dict: dict[str, list[float]] = defaultdict(list)
 
         for fold_id, row in self.df.iterrows():
-            if self.includes_FI and self.provided_FI is not None:
+            if self.provided_FI is not None:
                 fi_series = self.provided_FI[fold_id]
 
             else:
@@ -118,6 +112,8 @@ class FeatureImportance:
             color (str): name of the color used for the QM features
         """
         topology_features: list[str] = get_topology_features()
+
+        num_features = min(num_features, self.fi_df.shape[0])
 
         try:
             df = self.fi_df.head(num_features)
