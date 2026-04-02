@@ -1,4 +1,5 @@
 import pickle
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -17,15 +18,20 @@ def read_file(file: Path) -> dict[str, Any]:
         return pickle.load(f)
 
 
-def group_files_data(files: list[Path]) -> dict[str, np.ndarray[Any]]:
+def group_files_data(files: list[Path]) -> dict[str, np.ndarray[Any] | int]:
     models: list[BaseEstimator] = []
     train_r2s: list[float] = []
     test_r2s: list[float] = []
     train_MSEs: list[float] = []
     test_MSEs: list[float] = []
+    fold_ids: list[int] = []
     for file in files:
+        match = re.search(r"\d+", str(file))
+        fold_id: int = int(match.group())
+
         file_data = read_file(file)
         models.append(file_data["model"])
+        fold_ids.append(fold_id)
 
         train_r2s.append(file_data["train_r2"])
         train_MSEs.append(file_data["train_MSE"])
@@ -34,6 +40,7 @@ def group_files_data(files: list[Path]) -> dict[str, np.ndarray[Any]]:
         test_MSEs.append(file_data["test_MSE"])
 
     return {
+        "fold_id": np.array(fold_ids),
         "estimator": np.array(models),
         "train_r2": np.array(train_r2s),
         "test_r2": np.array(test_r2s),
@@ -49,6 +56,10 @@ def save_combined(combined_data: dict[str, np.ndarray[Any]], path: Path) -> None
 
 def get_coef(estimator: BaseEstimator) -> np.ndarray:
     return estimator.named_steps["predict"].coef_
+
+
+def get_rf_coef(estimator: BaseEstimator) -> np.ndarray:
+    return estimator.named_steps["predict"].feature_importances_
 
 
 def main() -> None:
