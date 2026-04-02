@@ -11,3 +11,4 @@ img/*
 data/sandbox_data/*
 HuberReg_RFE_*
 data/RF_results/*
+data/KRR_results/*
