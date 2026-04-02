@@ -66,9 +66,9 @@ def main() -> None:
     input_path: Path = Path(str(sys.argv[1]))
     output_file: Path = Path(str(sys.argv[2]))
 
-    storage_folder: Path = Path(r"C:\Users\thibo\Downloads\hpc_results")
-
     output_file.parent.mkdir(exist_ok=True)
+
+    storage_folder: Path = Path(r"C:\Users\thibo\Downloads\hpc_results")
 
     files: list[Path] = [file for file in input_path.glob("**/*") if file.is_file()]
 
