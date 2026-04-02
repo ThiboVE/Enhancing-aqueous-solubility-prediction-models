@@ -41,7 +41,7 @@ def test_provided_fi_used():
         1: pd.Series([1, 2], index=["a", "b"]),
     }
 
-    fi = FeatureImportance(df, includes_FI=True, provided_FI=provided)
+    fi = FeatureImportance(df, provided_FI=provided)
     result = fi.get_feature_importance(mode="full")
 
     assert set(result["feature"]) == {"a", "b"}
@@ -55,7 +55,7 @@ def test_missing_folds_raises():
     provided = {0: pd.Series([1, 2], index=["a", "b"])}
 
     with pytest.raises(ValueError):
-        FeatureImportance(df, includes_FI=True, provided_FI=provided)
+        FeatureImportance(df, provided_FI=provided)
 
 
 def test_two_stage_selection():
@@ -98,7 +98,7 @@ def test_inconsistent_features():
         1: pd.Series([1, 2], index=["a", "c"]),  # mismatch
     }
 
-    fi = FeatureImportance(df, includes_FI=True, provided_FI=provided)
+    fi = FeatureImportance(df, provided_FI=provided)
 
     # should not crash, but features will differ
     result = fi.get_feature_importance(mode="full")
