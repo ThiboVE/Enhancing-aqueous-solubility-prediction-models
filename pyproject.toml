@@ -15,7 +15,7 @@ dependencies = [
     "scipy>=1.17.1",
     "tqdm>=4.67.3",
     "seaborn>=0.13.2",
-    "pingouin">=0.6.1
+    "pingouin>=0.6.1",
 ]
 
 [project.optional-dependencies]
