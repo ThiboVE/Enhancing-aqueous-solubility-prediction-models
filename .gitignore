@@ -10,4 +10,6 @@ __pycache__/
 img/*
 data/sandbox_data/*
 HuberReg_RFE_*
+data/HuberReg_results/*
 data/RF_results/*
+data/KRR_results/*

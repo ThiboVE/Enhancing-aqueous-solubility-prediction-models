@@ -68,11 +68,23 @@ def main() -> None:
 
     output_file.parent.mkdir(exist_ok=True)
 
+    storage_folder: Path = Path(r"C:\Users\thibo\Downloads\hpc_results")
+
+    files: list[Path] = [file for file in input_path.glob("**/*") if file.is_file()]
+
+    if (input_path / "results").exists():
+        for file in files:
+            file.rename(input_path / file.name)
+
+        (input_path / "results").rmdir()
+
     files: list[Path] = [file for file in input_path.glob("**/*") if file.is_file()]
 
     combined_dict = group_files_data(files)
 
     save_combined(combined_dict, output_file)
+
+    input_path.rename(storage_folder / input_path)
 
 
 if __name__ == "__main__":

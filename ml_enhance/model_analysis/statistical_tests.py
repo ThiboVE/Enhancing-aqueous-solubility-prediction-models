@@ -75,10 +75,11 @@ class StatisticalComparison:
         return {"t_stat": t_stat, "p_value": p_value, "mean_diff": mean_diff}
 
 
-def compare(combo_df: pd.DataFrame, topo_df: pd.DataFrame, qm_df: pd.DataFrame, n_tot: int) -> None:
-    assert all("name" in df.columns for df in [combo_df, topo_df, qm_df]), (
-        "all dataframes should contain 'name' column."
-    )
+def compare(
+    combo_df: pd.DataFrame, topo_df: pd.DataFrame, qm_df: pd.DataFrame | None = None, n_tot: int = 8763
+) -> None:
+    dfs = [combo_df, topo_df, qm_df] if qm_df is not None else [combo_df, topo_df]
+    assert all("name" in df.columns for df in dfs), "all dataframes should contain 'name' column."
     metrics = ["r2", "MSE"]
     for metric in metrics:
         comparator = StatisticalComparison(
@@ -88,7 +89,7 @@ def compare(combo_df: pd.DataFrame, topo_df: pd.DataFrame, qm_df: pd.DataFrame, 
         ttest_result = comparator.nadeau_bengio_corrected_t_test()
         wilcoxon_result = comparator.wilcoxon_fold_differences()
 
-        for df in [combo_df, topo_df, qm_df]:
+        for df in dfs:
             print(
                 f"{df['name'][0]} mean {metric}: {np.abs(df[f'test_{metric}']).mean()} (Train: {np.abs(df[f'train_{metric}']).mean()})"
             )
