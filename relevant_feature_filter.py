@@ -1,6 +1,7 @@
 """Goal of this file is to generate a .csv for the HPC. In this file, a drastic filtering of the feature set is done such that only the relevant (chemically/physically reasonable) features remain."""
 
 import pandas as pd
+from rdkit import Chem
 
 
 def filter_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -85,6 +86,7 @@ def filter_df(df: pd.DataFrame) -> pd.DataFrame:
         "std_bond_energy",
         "num_heavy_H_bonds",
         "rigid_flag",
+        "molecular_volume",
     ]
 
     irrelevant_topo_features = [
@@ -104,20 +106,58 @@ def filter_df(df: pd.DataFrame) -> pd.DataFrame:
         "Chi3n",
         "Chi4n",
         "Ipc",
+        "MolWt",
+        "HeavyAtomMolWt",
+        "ExactMolWt",
+        "NumValenceElectrons",
+        "HeavyAtomCount",
+        "LabuteASA",
     ]
 
     return df.drop(irrelevant_qm_features + irrelevant_qm_topo_features + irrelevant_topo_features, axis=1)
 
 
+def get_num_atoms(smiles: str) -> int:
+    mol = Chem.MolFromSmiles(smiles)
+    return mol.GetNumAtoms()
+
+
+def normalize(df: pd.DataFrame) -> pd.DataFrame:
+    to_normalize = [
+        "radius_of_gyration",
+        "molecular_sasa",
+        "sterimol_L",
+        "sterimol_Bmin",
+        "sterimol_Bmax",
+        "molecular_polarizability_mean",
+        "molecular_polarizability_anisotropy",
+        "Chi0v",
+        "Chi1v",
+        "Chi2v",
+        "Chi3v",
+        "Chi4v",
+        "Kappa1",
+        "Kappa2",
+        "Kappa3",
+        "TPSA",
+    ]
+
+    new_cols = {f"{feature}_per_atom": df[feature] / df["n_atoms"] for feature in to_normalize}
+
+    df = pd.concat([df, pd.DataFrame(new_cols)], axis=1)
+
+    return df.drop(to_normalize, axis=1)
+
+
 def main() -> None:
-    # load df from file
     df = pd.read_csv(r"data\processed_dataset_wo_metals_w_even_more_qm2.csv")
+    df = df.copy()
 
     df = filter_df(df)
+    df["n_atoms"] = df["smiles"].map(get_num_atoms)
+    df = normalize(df)
 
-    print(df.info())
-    # filter irrelevant features
-    # save as new file
+    df.to_csv(r"./data/processed_dataset_wo_metals_w_even_more_qm2_relevant.csv")
 
 
 if __name__ == "__main__":
