@@ -6,8 +6,6 @@ from rdkit import Chem
 
 def filter_df(df: pd.DataFrame) -> pd.DataFrame:
     irrelevant_qm_features = [
-        "ionization_energy",
-        "electron_affinity",
         "molecular_quadrupole_principal_invariant_3",
         "avg_effective_coordination_number",
         "avg_atomic_dipole_norm",
@@ -140,6 +138,11 @@ def normalize(df: pd.DataFrame) -> pd.DataFrame:
         "Kappa2",
         "Kappa3",
         "TPSA",
+        "NumHAcceptors",
+        "RingCount",
+        "HallKierAlpha",
+        "NumHeteroatoms",
+        "NumRotatableBonds",
     ]
 
     new_cols = {f"{feature}_per_atom": df[feature] / df["n_atoms"] for feature in to_normalize}
@@ -157,7 +160,7 @@ def main() -> None:
     df["n_atoms"] = df["smiles"].map(get_num_atoms)
     df = normalize(df)
 
-    df.to_csv(r"./data/processed_dataset_wo_metals_w_even_more_qm2_relevant.csv")
+    df.to_csv(r"./data/processed_dataset_wo_metals_w_even_more_qm2_relevant.csv", index=False)
 
 
 if __name__ == "__main__":

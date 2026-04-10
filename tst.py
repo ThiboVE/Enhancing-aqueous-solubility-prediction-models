@@ -1,9 +1,10 @@
-import sys
+from ml_enhance import get_topology_features
 
 
 def main() -> None:
-    t1 = str(sys.argv[5])
-    print(t1)
+    topo_features = get_topology_features()
+
+    print(topo_features)
 
 
 if __name__ == "__main__":

@@ -21,11 +21,12 @@ def main() -> None:
 
     files: list[Path] = [file for file in input_path.glob("**/*") if file.is_file()]
 
-    if (input_path / "results").exists():
-        for file in files:
-            file.rename(input_path / file.name)
+    assert (input_path / "results").exists(), f"{input_path / 'results'} does not exist."
 
-        (input_path / "results").rmdir()
+    for file in files:
+        file.rename(input_path / file.name)
+
+    (input_path / "results").rmdir()
 
     files: list[Path] = [file for file in input_path.glob("**/*") if file.is_file()]
 
