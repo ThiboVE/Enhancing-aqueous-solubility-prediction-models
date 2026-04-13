@@ -1,10 +1,11 @@
-from ml_enhance import get_topology_features
+from pathlib import Path
 
 
 def main() -> None:
-    topo_features = get_topology_features()
-
-    print(topo_features)
+    path = Path("2_KRR_combo_filtered")
+    for obj in path.glob("*"):
+        suffix = ".csv" if "PFI" in obj.name else ".pkl"
+        obj.rename(obj.parent / (obj.name + suffix))
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 
 import json
 import pickle
+import re
 from _collections_abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
@@ -68,3 +69,20 @@ def load_hpc_result(path: Path, name: str | None = None) -> pd.DataFrame:
         if name is not None:
             df["name"] = name
         return df.set_index("fold_id")
+
+
+def parse_filename(file: Path) -> dict[str, int | float | None]:
+    stem = file.stem
+
+    fold_match = re.search(r"id=(\d+)", stem)
+    if not fold_match:
+        raise ValueError(f"Missing fold_id in {file}")
+    fold_id = int(fold_match.group(1))
+
+    size_match = re.search(r"size=([0-9]*\.?[0-9]+)", stem)
+    size = float(size_match.group(1)) if size_match else 1.0
+
+    return {
+        "fold_id": fold_id,
+        "size": size,
+    }

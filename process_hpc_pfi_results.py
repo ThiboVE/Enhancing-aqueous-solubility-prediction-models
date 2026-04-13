@@ -19,7 +19,7 @@ def main() -> None:
 
     storage_folder: Path = Path(r"C:\Users\thibo\Downloads\hpc_results")
 
-    files: list[Path] = [file for file in input_path.glob("**/*") if file.is_file()]
+    files: list[Path] = [file for file in input_path.glob("**/*.csv") if file.is_file()]
 
     assert (input_path / "results").exists(), f"{input_path / 'results'} does not exist."
 
@@ -28,7 +28,7 @@ def main() -> None:
 
     (input_path / "results").rmdir()
 
-    files: list[Path] = [file for file in input_path.glob("**/*") if file.is_file()]
+    csv_files: list[Path] = [file for file in input_path.glob("**/*.csv") if file.is_file()]
 
     FI_dict: dict[int, pd.Series] = {}
     for file in files:
