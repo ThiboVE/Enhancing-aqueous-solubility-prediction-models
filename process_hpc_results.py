@@ -74,7 +74,7 @@ def main() -> None:
     output_name: str = str(sys.argv[2])
 
     output_file = Path(output_name + "_results.pkl")
-    PFI_output_file = Path(output_name + "_PFI_results.pkl")
+    PFI_output_file = Path(output_name + "_PFI_results.csv")
 
     output_file.parent.mkdir(exist_ok=True)
 
@@ -94,10 +94,16 @@ def main() -> None:
 
     csv_files: list[Path] = [file for file in input_path.glob("**/*.csv") if file.is_file()]
     csv_grouped = group_files(csv_files, read_pfi_csv)
-    FI_dict = dict(zip(csv_grouped["fold_id"], csv_grouped["feature_importance"], strict=True))
+
+    sizes = csv_grouped.get("size", [None] * len(csv_grouped["fold_id"]))
+    keys = list(zip(csv_grouped["fold_id"], sizes, strict=True))
+
+    FI_df = pd.concat(csv_grouped["feature_importance"], keys=keys, names=["fold_id", "size", "feature"]).reset_index(
+        name="r2_mean"
+    )
 
     save_combined(pkl_grouped_np, output_file)
-    save_combined(FI_dict, PFI_output_file)
+    FI_df.to_csv(PFI_output_file, index=False)
     input_path.rename(storage_folder / input_path)
 
 
