@@ -5,6 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ml-enhance"
 description = "Investigating potential ML enhancements using QM descriptors."
+requires-python = ">=3.11"
 dynamic = ["version"]
 dependencies = [
     "numpy>=2.2.4",
