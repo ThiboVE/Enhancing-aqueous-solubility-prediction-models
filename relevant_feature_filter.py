@@ -158,9 +158,9 @@ def main() -> None:
 
     df = filter_df(df)
     df["n_atoms"] = df["smiles"].map(get_num_atoms)
-    df = normalize(df)
+    # df = normalize(df)
 
-    df.to_csv(r"./data/processed_dataset_wo_metals_w_even_more_qm2_relevant.csv", index=False)
+    df.to_csv(r"./data/processed_dataset_wo_metals_w_even_more_qm2_relevant_no_norm.csv", index=False)
 
 
 if __name__ == "__main__":
