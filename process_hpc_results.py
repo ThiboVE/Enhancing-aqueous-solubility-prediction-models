@@ -71,8 +71,11 @@ def get_rf_coef(estimator: BaseEstimator) -> np.ndarray:
 
 def main() -> None:
     input_path: Path = Path(str(sys.argv[1]))
-    output_name: str = str(sys.argv[2])
 
+    dirname = input_path.name
+    modelname = dirname.split("_")[1]
+
+    output_name = f"data/{modelname}_results/{dirname}"
     output_file = Path(output_name + "_results.pkl")
     PFI_output_file = Path(output_name + "_PFI_results.csv")
 
@@ -92,18 +95,21 @@ def main() -> None:
     pkl_grouped = group_files(pkl_files, read_pkl_summary)
     pkl_grouped_np = {k: np.array(v) for k, v in pkl_grouped.items()}
 
-    csv_files: list[Path] = [file for file in input_path.glob("**/*.csv") if file.is_file()]
-    csv_grouped = group_files(csv_files, read_pfi_csv)
-
-    sizes = csv_grouped.get("size", [None] * len(csv_grouped["fold_id"]))
-    keys = list(zip(csv_grouped["fold_id"], sizes, strict=True))
-
-    FI_df = pd.concat(csv_grouped["feature_importance"], keys=keys, names=["fold_id", "size", "feature"]).reset_index(
-        name="r2_mean"
-    )
-
     save_combined(pkl_grouped_np, output_file)
-    FI_df.to_csv(PFI_output_file, index=False)
+
+    csv_files: list[Path] = [file for file in input_path.glob("**/*.csv") if file.is_file()]
+    if len(csv_files) != 0:
+        csv_grouped = group_files(csv_files, read_pfi_csv)
+
+        sizes = csv_grouped.get("size", [None] * len(csv_grouped["fold_id"]))
+        keys = list(zip(csv_grouped["fold_id"], sizes, strict=True))
+
+        FI_df = pd.concat(
+            csv_grouped["feature_importance"], keys=keys, names=["fold_id", "size", "feature"]
+        ).reset_index(name="r2_mean")
+
+        FI_df.to_csv(PFI_output_file, index=False)
+
     input_path.rename(storage_folder / input_path)
 
 

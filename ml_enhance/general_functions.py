@@ -66,9 +66,10 @@ def get_topology_features() -> list[str]:
 def load_hpc_result(path: Path, name: str | None = None, *, id_as_index: bool = True) -> pd.DataFrame:
     with path.open("rb") as f:
         df = pd.DataFrame(pickle.load(f))
-        if name is not None:
-            df["name"] = name
-        return df.set_index("fold_id") if id_as_index else df
+
+    if name is not None:
+        df["name"] = name
+    return df.set_index("fold_id") if id_as_index else df
 
 
 def parse_filename(file: Path) -> dict[str, int | float | None]:

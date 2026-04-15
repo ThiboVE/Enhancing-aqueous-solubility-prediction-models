@@ -151,7 +151,7 @@ class FeatureImportance:
         plt.gca().spines["top"].set_visible(False)
         plt.gca().spines["right"].set_visible(False)
 
-        plt.xlabel("Weighted Feature importance", fontsize=16)
+        plt.xlabel("Feature importance", fontsize=16)
         plt.title(f"Top {num_features} most important features", fontsize=16)
         plt.legend(handles=legend_elements, frameon=False, loc="lower right", fontsize=12)
         plt.tight_layout()
