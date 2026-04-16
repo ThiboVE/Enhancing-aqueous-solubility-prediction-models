@@ -1,7 +1,13 @@
 """Library for training ML models using topological and QFP descriptors."""
 
 from ml_enhance.correlation_filter import CorrelationFilter
-from ml_enhance.general_functions import canonicalize_smiles, get_topology_features, load_hpc_result, parallelize
+from ml_enhance.general_functions import (
+    canonicalize_smiles,
+    get_topology_features,
+    load_hpc_result,
+    parallelize,
+    parse_filename,
+)
 from ml_enhance.hpc_utils import (
     Files,
     LoggerWriter,
@@ -51,6 +57,7 @@ __all__ = [
     "is_salt",
     "load_hpc_result",
     "parallelize",
+    "parse_filename",
     "plot_FI",
     "plot_scaled_linreg_result",
     "process_fold",

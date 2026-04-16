@@ -1,3 +1,4 @@
+import re
 from typing import NamedTuple
 
 import matplotlib.pyplot as plt
@@ -95,9 +96,10 @@ def plot_FI(
     FI_data_sorted = FI_data.abs().sort_values(ascending=False)[:num_features]
 
     topology_features: list[str] = get_topology_features()
+    pattern = "|".join(topology_features)
 
-    colors = [color if feature not in topology_features else "grey" for feature in FI_data_sorted.index]
-    alphas = [1 if feature not in topology_features else 0.6 for feature in FI_data_sorted.index]
+    colors = ["grey" if re.search(pattern, feature) else color for feature in FI_data_sorted.index]
+    alphas = [0.6 if re.search(pattern, feature) else 1 for feature in FI_data_sorted.index]
 
     plt.figure(figsize=(8, 6))
     bars = plt.barh(FI_data_sorted.index, FI_data_sorted.to_numpy(), color=colors)

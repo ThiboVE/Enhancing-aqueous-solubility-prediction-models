@@ -1,3 +1,4 @@
+import re
 from collections import defaultdict
 from typing import Literal
 
@@ -111,8 +112,6 @@ class FeatureImportance:
             fig_name (str): file name of the figure to be saved
             color (str): name of the color used for the QM features
         """
-        topology_features: list[str] = get_topology_features()
-
         num_features = min(num_features, self.fi_df.shape[0])
 
         try:
@@ -121,8 +120,11 @@ class FeatureImportance:
         except AttributeError:
             print("Feature importance is not calculated, try running 'get_feature_importance' first.")
 
-        colors = [color if feature not in topology_features else "grey" for feature in df["feature"]]
-        alphas = [1 if feature not in topology_features else 0.6 for feature in df["feature"]]
+        pattern = "|".join(get_topology_features())
+        topology_features: list[str] = [feature for feature in df["feature"] if re.search(pattern, feature)]
+
+        colors = ["grey" if feature in topology_features else color for feature in df["feature"]]
+        alphas = [0.6 if feature in topology_features else 1 for feature in df["feature"]]
 
         plt.figure(figsize=(8, 6))
         bars = plt.barh(df["feature"], df["score"].to_numpy(), color=colors, xerr=df["std_score"].to_numpy(), capsize=3)
@@ -149,7 +151,7 @@ class FeatureImportance:
         plt.gca().spines["top"].set_visible(False)
         plt.gca().spines["right"].set_visible(False)
 
-        plt.xlabel("Weighted Feature importance", fontsize=16)
+        plt.xlabel("Feature importance", fontsize=16)
         plt.title(f"Top {num_features} most important features", fontsize=16)
         plt.legend(handles=legend_elements, frameon=False, loc="lower right", fontsize=12)
         plt.tight_layout()

@@ -1,14 +1,15 @@
 import pickle
-import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pandas as pd
 from sklearn.base import BaseEstimator
 
 import ml_enhance
-from ml_enhance import CorrelationFilter  # noqa: F401
+from ml_enhance import CorrelationFilter, parse_filename  # noqa: F401
 
 sys.modules["utils"] = ml_enhance
 
@@ -18,35 +19,41 @@ def read_file(file: Path) -> dict[str, Any]:
         return pickle.load(f)
 
 
-def group_files_data(files: list[Path]) -> dict[str, np.ndarray[Any] | int]:
-    models: list[BaseEstimator] = []
-    train_r2s: list[float] = []
-    test_r2s: list[float] = []
-    train_MSEs: list[float] = []
-    test_MSEs: list[float] = []
-    fold_ids: list[int] = []
-    for file in files:
-        match = re.search(r"\d+", str(file))
-        fold_id: int = int(match.group())
-
-        file_data = read_file(file)
-        models.append(file_data["model"])
-        fold_ids.append(fold_id)
-
-        train_r2s.append(file_data["train_r2"])
-        train_MSEs.append(file_data["train_MSE"])
-
-        test_r2s.append(file_data["test_r2"])
-        test_MSEs.append(file_data["test_MSE"])
+def read_pkl_summary(file: Path) -> dict[str, Any]:
+    file_data = read_file(file)
 
     return {
-        "fold_id": np.array(fold_ids),
-        "estimator": np.array(models),
-        "train_r2": np.array(train_r2s),
-        "test_r2": np.array(test_r2s),
-        "train_MSE": np.array(train_MSEs),
-        "test_MSE": np.array(test_MSEs),
+        "estimator": file_data["model"],
+        "train_r2": file_data["train_r2"],
+        "test_r2": file_data["test_r2"],
+        "train_MSE": file_data["train_MSE"],
+        "test_MSE": file_data["test_MSE"],
     }
+
+
+def read_pfi_csv(file: Path) -> dict[str, Any]:
+    df = pd.read_csv(file, index_col="feature")
+
+    return {"feature_importance": df["r2_mean"]}
+
+
+def group_files(
+    files: list[Path],
+    reader_fn: Callable[[Path], dict[str, Any]],
+) -> dict[str, list[Any]]:
+    grouped: dict[str, list[Any]] = {}
+
+    for file in files:
+        info = parse_filename(file)
+
+        data = reader_fn(file)
+
+        combined = {**info, **data}
+
+        for key, value in combined.items():
+            grouped.setdefault(key, []).append(value)
+
+    return grouped
 
 
 def save_combined(combined_data: dict[str, np.ndarray[Any]], path: Path) -> None:
@@ -64,7 +71,13 @@ def get_rf_coef(estimator: BaseEstimator) -> np.ndarray:
 
 def main() -> None:
     input_path: Path = Path(str(sys.argv[1]))
-    output_file: Path = Path(str(sys.argv[2]))
+
+    dirname = input_path.name
+    modelname = dirname.split("_")[1]
+
+    output_name = f"data/{modelname}_results/{dirname}"
+    output_file = Path(output_name + "_results.pkl")
+    PFI_output_file = Path(output_name + "_PFI_results.csv")
 
     output_file.parent.mkdir(exist_ok=True)
 
@@ -78,11 +91,24 @@ def main() -> None:
 
         (input_path / "results").rmdir()
 
-    files: list[Path] = [file for file in input_path.glob("**/*") if file.is_file()]
+    pkl_files: list[Path] = [file for file in input_path.glob("**/*.pkl") if file.is_file()]
+    pkl_grouped = group_files(pkl_files, read_pkl_summary)
+    pkl_grouped_np = {k: np.array(v) for k, v in pkl_grouped.items()}
 
-    combined_dict = group_files_data(files)
+    save_combined(pkl_grouped_np, output_file)
 
-    save_combined(combined_dict, output_file)
+    csv_files: list[Path] = [file for file in input_path.glob("**/*.csv") if file.is_file()]
+    if len(csv_files) != 0:
+        csv_grouped = group_files(csv_files, read_pfi_csv)
+
+        sizes = csv_grouped.get("size", [None] * len(csv_grouped["fold_id"]))
+        keys = list(zip(csv_grouped["fold_id"], sizes, strict=True))
+
+        FI_df = pd.concat(
+            csv_grouped["feature_importance"], keys=keys, names=["fold_id", "size", "feature"]
+        ).reset_index(name="r2_mean")
+
+        FI_df.to_csv(PFI_output_file, index=False)
 
     input_path.rename(storage_folder / input_path)
 

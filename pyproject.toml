@@ -5,6 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ml-enhance"
 description = "Investigating potential ML enhancements using QM descriptors."
+requires-python = ">=3.11"
 dynamic = ["version"]
 dependencies = [
     "numpy>=2.2.4",
@@ -16,6 +17,7 @@ dependencies = [
     "tqdm>=4.67.3",
     "seaborn>=0.13.2",
     "pingouin>=0.6.1",
+    "torch>=2.11.0",
 ]
 
 [project.optional-dependencies]

@@ -6,15 +6,12 @@ from scipy import stats
 class StatisticalComparison:
     """Class that encompasses statistical methods to compare two different models."""
 
-    def __init__(self, model1_scores: np.ndarray, model2_scores: np.ndarray, n_tot: int) -> None:
+    def __init__(self, model1_scores: np.ndarray, model2_scores: np.ndarray) -> None:
         if model1_scores.shape != model2_scores.shape:
             raise ValueError("scores1 and scores2 must have the same shape")
 
         self.scores1 = np.abs(model1_scores)
         self.scores2 = np.abs(model2_scores)
-
-        self.n_train = n_tot * 4 // 5
-        self.n_test = n_tot - self.n_train
 
     def wilcoxon_fold_differences(self) -> dict[str, float]:
         """Compute Wilcoxon signed-rank test for fold-wise differences.
@@ -37,7 +34,7 @@ class StatisticalComparison:
 
         return {"wilcoxon_stat": wilcoxon_stat, "p_value_w": p_value_w, "mean_diff": mean_diff}
 
-    def nadeau_bengio_corrected_t_test(self) -> dict[str, float]:
+    def nadeau_bengio_corrected_t_test(self, n_train: int, n_test: int) -> dict[str, float]:
         """Compute Nadeau & Bengio (2003) corrected paired t-test for repeated k-fold CV.
 
         Parameters:
@@ -63,7 +60,7 @@ class StatisticalComparison:
 
         # Nadeau & Bengio corrected variance
         n_folds = len(d)
-        corrected_var = var_d / n_folds * (1 + self.n_test / self.n_train)
+        corrected_var = var_d / n_folds * (1 + n_test / n_train)
 
         # Corrected t-statistic
         t_stat = mean_diff / np.sqrt(corrected_var)
@@ -76,18 +73,18 @@ class StatisticalComparison:
 
 
 def compare(
-    combo_df: pd.DataFrame, topo_df: pd.DataFrame, qm_df: pd.DataFrame | None = None, n_tot: int = 8763
+    combo_df: pd.DataFrame, topo_df: pd.DataFrame, qm_df: pd.DataFrame | None = None, *, n_train: int, n_test: int
 ) -> None:
     dfs = [combo_df, topo_df, qm_df] if qm_df is not None else [combo_df, topo_df]
     assert all("name" in df.columns for df in dfs), "all dataframes should contain 'name' column."
     metrics = ["r2", "MSE"]
     for metric in metrics:
-        comparator = StatisticalComparison(
-            combo_df[f"test_{metric}"].to_numpy(), topo_df[f"test_{metric}"].to_numpy(), n_tot
-        )
+        comparator = StatisticalComparison(combo_df[f"test_{metric}"].to_numpy(), topo_df[f"test_{metric}"].to_numpy())
 
-        ttest_result = comparator.nadeau_bengio_corrected_t_test()
+        ttest_result = comparator.nadeau_bengio_corrected_t_test(n_train, n_test)
         wilcoxon_result = comparator.wilcoxon_fold_differences()
+
+        alpha = 0.05
 
         for df in dfs:
             print(
@@ -96,9 +93,9 @@ def compare(
 
         print("Mean improvement:", ttest_result["mean_diff"])
         print(
-            f"T-test p-value: {ttest_result['p_value']} ->{' not' if ttest_result['p_value'] > 0.05 else ''} statistically significant"
+            f"T-test p-value: {ttest_result['p_value']} ->{' not' if ttest_result['p_value'] > alpha else ''} statistically significant"
         )
         print(
-            f"Wilcoxon p-value: {wilcoxon_result['p_value_w']} ->{' not' if wilcoxon_result['p_value_w'] > 0.05 else ''} statistically significant"
+            f"Wilcoxon p-value: {wilcoxon_result['p_value_w']} ->{' not' if wilcoxon_result['p_value_w'] > alpha else ''} statistically significant"
         )
         print("\n")
