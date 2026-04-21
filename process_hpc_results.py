@@ -1,3 +1,22 @@
+"""Script used to process calculations downloaded from the HPC.
+
+The calculations are in the following format:
+
+directory 'calculation_name'/results contains files
+
+'calculation_name'_id=..._results.pkl
+'calculation_name'_id=..._PFI_results.csv
+
+for objective 1 and
+
+'calculation_name'_id=..._size=..._results.pkl
+'calculation_name'_id=..._size=..._PFI_results.csv
+
+for objective 2.
+
+These files are pulled out of the results directory and combined into one two files: one for the model and performance (.pkl file) and one for the permutation feature importance (PFI) results (.csv file).
+"""
+
 import pickle
 import sys
 from collections.abc import Callable
@@ -62,10 +81,12 @@ def save_combined(combined_data: dict[str, np.ndarray[Any]], path: Path) -> None
 
 
 def get_coef(estimator: BaseEstimator) -> np.ndarray:
+    """Function not used in code but, required to properly read in the results."""
     return estimator.named_steps["predict"].coef_
 
 
 def get_rf_coef(estimator: BaseEstimator) -> np.ndarray:
+    """Function not used in code but, required to properly read in the results."""
     return estimator.named_steps["predict"].feature_importances_
 
 
