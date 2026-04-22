@@ -3,7 +3,6 @@ import pickle
 import sys
 import time
 from collections.abc import Iterable
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Self
 
@@ -13,10 +12,50 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics import mean_squared_error, r2_score
 
 
-@dataclass
 class Files:
-    SPLITS_FILE: Path
-    RESULTS_FILE: Path
+    def __init__(self, running_file: str, filename: str) -> None:
+        self.running_file: Path = Path(running_file)
+        self.filename: str = filename
+
+        self.base = self.running_file.parent
+
+        self.output_dir = Path("/data/gent/489/vsc48953/ML_enhance") / self.running_file.stem / "results"
+        self.log_dir = self.base / "logs"
+
+    def ensure_dirs(self) -> None:
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+
+    def get_df_file(self, df_file_name: str) -> Path:
+        return self.base.parent / df_file_name
+
+    @property
+    def SPLITS_FILE(self) -> Path:
+        return self.base.parent / "splits.pkl"
+
+    @property
+    def RDKIT_FILE(self) -> Path:
+        return self.base.parent / "rdkit_feature_names.json"
+
+    @property
+    def LOG_FILE(self) -> Path:
+        return self.log_dir / f"{self.filename}.log"
+
+    @property
+    def RESULTS_FILE(self) -> Path:
+        return self.output_dir / f"{self.filename}_results.pkl"
+
+    @property
+    def RESULTS_FILE_JSON(self) -> Path:
+        return self.output_dir / f"{self.filename}_results.json"
+
+    @property
+    def RESULTS_FILE_MODEL(self) -> Path:
+        return self.output_dir / f"{self.filename}_model.json"
+
+    @property
+    def PFI_RESULTS_FILE(self) -> Path:
+        return self.output_dir / f"{self.filename}_PFI_results.csv"
 
 
 class CorrelationFilter(BaseEstimator, TransformerMixin):
@@ -89,21 +128,14 @@ class LoggerWriter:
         pass
 
 
-def setup_logger(DATA_PATH: Path, filename: str) -> logging.Logger:
-    # Create log directory
-    log_dir = DATA_PATH / "logs"
-    log_dir.mkdir(exist_ok=True)
-
-    assert filename.endswith(".log"), "filename should end with '.log'."
-
-    # Log filename
-    log_filename: Path = log_dir / filename
+def setup_logger(log_file: Path) -> logging.Logger:
+    assert log_file.suffix == ".log", "filename should end with '.log'."
 
     # Configure basic logging
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-        handlers=[logging.FileHandler(log_filename, mode="w"), logging.StreamHandler()],
+        handlers=[logging.FileHandler(log_file, mode="w"), logging.StreamHandler()],
     )
 
     # Main logger
@@ -111,9 +143,17 @@ def setup_logger(DATA_PATH: Path, filename: str) -> logging.Logger:
 
     logging.captureWarnings(True)
 
+    # Attach handlers to Optuna logger as well
+    optuna_logger = logging.getLogger("optuna")
+    optuna_logger.setLevel(logging.INFO)
+    # Avoid duplicate logs if handlers already exist
+    if not optuna_logger.handlers:
+        optuna_logger.addHandler(logging.FileHandler(log_file, mode="a"))
+        optuna_logger.addHandler(logging.StreamHandler())
+
     sys.stdout = LoggerWriter(logger, logging.INFO)
 
-    logger.info(f"Logging to: {log_filename}")
+    logger.info(f"Logging to: {log_file}")
 
     return logger
 
