@@ -1,6 +1,5 @@
 import json
 import sys
-from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from logging import Logger
 from pathlib import Path
@@ -15,21 +14,19 @@ from chemprop.models import MPNN
 from chemprop.models.utils import save_model
 from chemprop.nn import BondMessagePassing, MeanAggregation, RegressionFFN
 from lightning import pytorch as pl
-from optuna.integration import PyTorchLightningPruningCallback
+from lightning.pytorch.loggers import CSVLogger
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import Dataset, Subset
 
 from ml_enhance.hpc_utils import setup_logger
 
-pl.seed_everything(152, workers=True)
-
 
 @dataclass
 class FixedParams:
     use_gpu: bool = torch.cuda.is_available()
     batch_size: int = 100
-    num_workers: int = 1
+    num_workers: int = 2
     dropout: float = 0.1
     n_epochs: int = 2  # 30
     metrics: list = field(default_factory=lambda: [nn.metrics.MSE(), nn.metrics.R2Score()])
@@ -67,6 +64,10 @@ class Files:
         return self.log_dir / f"{self.filename}.log"
 
     @property
+    def LIGHTNING_LOG_DIR(self) -> Path:
+        return self.log_dir / f"{self.filename}_log"
+
+    @property
     def RESULTS_FILE(self) -> Path:
         return self.output_dir / f"{self.filename}_results.pkl"
 
@@ -76,7 +77,7 @@ class Files:
 
     @property
     def RESULTS_FILE_MODEL(self) -> Path:
-        return self.output_dir / f"{self.filename}_model.json"
+        return self.output_dir / f"{self.filename}_model.pt"
 
     @property
     def PFI_RESULTS_FILE(self) -> Path:
@@ -121,9 +122,21 @@ def make_dataloaders(
         val_dset.normalize_targets(scaler)
 
     train_loader = data.build_dataloader(
-        train_dset, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers
+        train_dset,
+        batch_size=cfg.batch_size,
+        shuffle=True,
+        num_workers=cfg.num_workers,
+        persistent_workers=True,
+        pin_memory=cfg.use_gpu,
     )
-    val_loader = data.build_dataloader(val_dset, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers)
+    val_loader = data.build_dataloader(
+        val_dset,
+        batch_size=cfg.batch_size,
+        shuffle=False,
+        num_workers=cfg.num_workers,
+        persistent_workers=True,
+        pin_memory=cfg.use_gpu,
+    )
 
     return train_loader, val_loader, scaler
 
@@ -133,31 +146,40 @@ def make_dataloaders(
 # ----------------------------
 
 
-def make_trainer(logger: Logger, cfg: FixedParams, trial: optuna.Trial | None = None) -> pl.Trainer:
-    callbacks = []
+def make_trainer(logger: CSVLogger | bool | None, cfg: FixedParams, trial: optuna.Trial | None = None) -> pl.Trainer:
+    # callbacks = []
 
-    if trial is not None:
-        callbacks.append(PyTorchLightningPruningCallback(trial, monitor="val_loss"))
+    if logger is None:
+        logger = False
+
+    # if trial is not None:
+    #     callbacks.append(PyTorchLightningPruningCallback(trial, monitor="val_loss"))
 
     return pl.Trainer(
-        logger=False,
+        logger=logger,
         enable_checkpointing=False,
         enable_progress_bar=False,
+        enable_model_summary=False,
         accelerator="gpu" if cfg.use_gpu else "cpu",
         devices=1,
         max_epochs=cfg.n_epochs,
         deterministic=True,
-        callbacks=callbacks,
+        # callbacks=callbacks,
         # precision="16-mixed" if use_GPU else 32,
     )
 
 
 def inner_cv_objective(
-    trial: optuna.Trial, dataset: Dataset, inner_cv: KFold, model_factory: MPNNFactory, logger: Logger, cfg: FixedParams
+    trial: optuna.Trial,
+    dataset: Dataset,
+    inner_cv: KFold,
+    logfile: Path,
+    logger: Logger,
+    cfg: FixedParams,
 ) -> float:
     losses: list[float] = []
 
-    params = {
+    params: dict[str, int] = {
         "message_hidden_dim": trial.suggest_int("message_hidden_dim", 100, 500),
         "depth": trial.suggest_int("depth", 1, 5),
         "ffn_hidden_dim": trial.suggest_int("ffn_hidden_dim", 100, 500),
@@ -168,12 +190,14 @@ def inner_cv_objective(
     for fold_id, (tr_idxs, va_idxs) in enumerate(inner_cv.split(range(len(dataset))), 1):
         logger.info(f"Inner Fold {fold_id}/{n_inner_folds} for trial {trial.number}...")
 
+        pl_logger = CSVLogger(logfile) if fold_id == 1 else False
+
         train_dset = Subset(dataset, tr_idxs)
         val_dset = Subset(dataset, va_idxs)
 
         train_loader, val_loader, scaler = make_dataloaders(train_dset, val_dset, cfg)
 
-        trainer = make_trainer(logger, cfg, trial)
+        trainer = make_trainer(pl_logger, cfg, trial)
         model = MPNNFactory(cfg).build(params, scaler)
 
         logger.info("Start training")
@@ -190,10 +214,11 @@ def inner_cv_objective(
         logger.info(f"Validation Loss: [{val_loss:.2f}]")
 
         # Per fold pruning
-        # trial.report(np.mean(losses), step=fold_id)
+        trial.report(np.mean(losses), step=fold_id)
 
-        # if trial.should_prune():
-        #     raise optuna.TrialPruned()
+        if trial.should_prune():
+            logger.info(f"Trial {trial.number} pruned at fold {fold_id}")
+            raise optuna.TrialPruned()
 
         # Clear GPU mem post-trial
         if cfg.use_gpu and fold_id % 2 == 0:
@@ -203,20 +228,18 @@ def inner_cv_objective(
 
 
 def run_tuning_per_fold(
-    outer_train_dataset: Dataset, inner_cv: KFold, logger: Logger, cfg: FixedParams
+    outer_train_dataset: Dataset, inner_cv: KFold, logger: Logger, logfile: Path, cfg: FixedParams
 ) -> dict[str, Any]:
     """Single-phase tuning on outer_train; final train/eval."""
     logger.info("Starting Single-Phase Tuning...")
 
-    model_factory = MPNNFactory(cfg)
-
     def obj(trial: optuna.Trial):
-        return inner_cv_objective(trial, outer_train_dataset, inner_cv, model_factory, logger, cfg)
+        return inner_cv_objective(trial, outer_train_dataset, inner_cv, logfile, logger, cfg)
 
     study = optuna.create_study(
         direction=cfg.opt_direction,
         sampler=optuna.samplers.TPESampler(seed=112),
-        pruner=optuna.pruners.HyperbandPruner(min_resource=5, max_resource=cfg.n_epochs),  # Prune early
+        pruner=optuna.pruners.HyperbandPruner(min_resource=2, max_resource=inner_cv.get_n_splits()),
     )
 
     # study.enqueue_trial(INIT_PARAMS)  # Define an inital trial I want the study to run
@@ -235,69 +258,53 @@ def run_tuning_per_fold(
 
 def save_fold_result(
     results_file: Path,
-    train_losses: Iterable[float] | float,
-    train_accs: Iterable[float] | float,
-    test_loss: Iterable[float] | float,
-    test_acc: Iterable[float] | float,
-    best_params: dict,
+    r2_test: float,
+    mse_test: float,
+    best_params: dict[str, int],
     logger: Logger,
 ) -> None:
     """Save the results of an outer fold"""
-    fold_data = {
-        "train_losses": train_losses,
-        "train_accs": train_accs,
-        "test_loss": test_loss,
-        "test_acc": test_acc,
+    fold_data: dict[str, int | float] = {
+        "r2_test": r2_test,
+        "mse_test": mse_test,
         **best_params,
     }
 
     with open(results_file, "w") as f:
         json.dump(fold_data, f)
 
-    logger.info(f"Saved results to {results_file}")
+    logger.info(f"Saved results to '{results_file}'")
 
 
 def test_model(
     train_dset: Dataset, test_dset: Dataset, best_params: dict[str, Any], logger: Logger, cfg: FixedParams
-) -> tuple[MPNN, float]:
+) -> tuple[MPNN, float, float]:
     # Final train on full outer_train
     logger.info("  Final Training on Outer Train...")
 
     train_loader, test_loader, scaler = make_dataloaders(train_dset, test_dset, cfg)
 
-    trainer = make_trainer(logger, cfg)
+    trainer = make_trainer(logger=False, cfg=cfg)
     mpnn = MPNNFactory(cfg).build(best_params, scaler)
 
-    train_losses, train_accs = [], []
-
     trainer.fit(mpnn, train_loader)
-
-    # train_losses.append(train_loss)
-    # train_accs.append(train_acc)
-
-    # logger.info(
-    #     f"Outer Epoch: [{epoch}]\tTraining Loss: [{train_loss:.2f}]\tReconstruction accuracy: [{train_acc}]"
-    # )
 
     # Outer test
     logger.info("  Evaluating on Outer Test...")
     trainer.test(mpnn, test_loader, weights_only=False)
 
     test_metrics = trainer.test(mpnn, test_loader)[0]
-    test_loss = test_metrics["test_loss"]
+    r2_score = test_metrics["test/r2"]
+    mse_score = test_metrics["test/mse"]
 
-    logger.info(f"Test loss: {test_loss:.4f}")
+    logger.info(f"Test accuracy: {r2_score:.4f}")
 
-    return mpnn, test_loss
-
-    # test_loss = ...
-    # test_acc = ...
-    # logger.info(f"  Outer Test Loss: {test_loss:.4f}, Acc: {test_acc:.4f}, Best params: {best_params}")
-
-    # return mpnn, train_losses, train_accs, test_loss, test_acc
+    return mpnn, r2_score, mse_score
 
 
-def main():
+def main() -> None:
+    pl.seed_everything(152, workers=True)
+
     fold_id = int(sys.argv[1])
 
     FILE_NAME: str = Path(__file__).stem + f"_id={fold_id}"
@@ -318,18 +325,18 @@ def main():
 
     inner_cv = KFold(n_splits=5, shuffle=True, random_state=42)
 
-    study_results = run_tuning_per_fold(outer_train_dset, inner_cv=inner_cv, logger=logger, cfg=cfg)
+    study_results = run_tuning_per_fold(
+        outer_train_dset, inner_cv=inner_cv, logger=logger, logfile=FILES.LIGHTNING_LOG_DIR, cfg=cfg
+    )
     best_params = study_results["best_params"]
 
     # Already save the best parameters of the outer fold
-    save_fold_result(FILES.RESULTS_FILE_JSON, 0, 0, 0, 0, best_params, logger)
+    save_fold_result(FILES.RESULTS_FILE_JSON, 0, 0, best_params, logger)
 
-    mpnn, test_loss = test_model(outer_train_dset, outer_test_dset, best_params, logger, cfg)
+    mpnn, r2_test, mse_test = test_model(outer_train_dset, outer_test_dset, best_params, logger, cfg)
 
-    # Save the results of the outer fold
-    save_fold_result(FILES.RESULTS_FILE_JSON, 0, 0, test_loss, 0, best_params, logger)
+    save_fold_result(FILES.RESULTS_FILE_JSON, r2_test, mse_test, best_params, logger)
 
-    # Save the weights of the model
     save_model(FILES.RESULTS_FILE_MODEL, mpnn)
 
 
