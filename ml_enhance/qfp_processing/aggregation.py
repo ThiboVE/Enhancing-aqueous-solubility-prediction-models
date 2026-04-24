@@ -33,8 +33,6 @@ class ConformerAggregator:
 
         averages = np.einsum("i,ij->j", weights, numeric_matrix)  # shape: (n_features,)
 
-        result = {"smiles": df["original_smiles"].iloc[0]}
-
         result = dict(zip(numeric_cols, averages, strict=True))
         result["smiles"] = df["original_smiles"].iloc[0]
 
