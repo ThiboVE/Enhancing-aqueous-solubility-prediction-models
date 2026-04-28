@@ -7,7 +7,6 @@ from typing import Any
 
 import numpy as np
 import optuna
-import pandas as pd
 import torch
 from chemprop import data, nn
 from chemprop.models import MPNN
@@ -15,11 +14,11 @@ from chemprop.models.utils import save_model
 from chemprop.nn import BondMessagePassing, MeanAggregation, RegressionFFN
 from lightning import pytorch as pl
 from lightning.pytorch.loggers import CSVLogger
-from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
-from torch.utils.data import Dataset, Subset
 
 from ml_enhance.hpc_utils import setup_logger
+
+type InnerFoldData = list[dict[str, data.MoleculeDataset | StandardScaler]]
 
 
 @dataclass
@@ -88,7 +87,7 @@ class MPNNFactory:
     def __init__(self, cfg: FixedParams) -> None:
         self.fixed_params = asdict(cfg)
 
-    def build(self, params: dict[str, Any], scaler: StandardScaler | None) -> MPNN:
+    def build(self, params: dict[str, Any]) -> MPNN:
         p = {**params, **self.fixed_params}
 
         mp = BondMessagePassing(
@@ -97,8 +96,6 @@ class MPNNFactory:
         )
 
         agg = MeanAggregation()
-
-        # output_transform = nn.UnscaleTransform.from_standard_scaler(scaler)
 
         ffn = RegressionFFN(
             input_dim=p["message_hidden_dim"],
@@ -112,15 +109,10 @@ class MPNNFactory:
 
 
 def make_dataloaders(
-    train_dset: Dataset,
-    val_dset: Dataset,
+    train_dset: data.MoleculeDataset,
+    val_dset: data.MoleculeDataset,
     cfg: FixedParams,
-    scaler: StandardScaler | None = None,
 ):
-    if scaler is not None:
-        scaler = train_dset.normalize_targets()
-        val_dset.normalize_targets(scaler)
-
     train_loader = data.build_dataloader(
         train_dset,
         batch_size=cfg.batch_size,
@@ -138,7 +130,7 @@ def make_dataloaders(
         pin_memory=cfg.use_gpu,
     )
 
-    return train_loader, val_loader, scaler
+    return train_loader, val_loader
 
 
 # ----------------------------
@@ -171,8 +163,7 @@ def make_trainer(logger: CSVLogger | bool | None, cfg: FixedParams, trial: optun
 
 def inner_cv_objective(
     trial: optuna.Trial,
-    dataset: Dataset,
-    inner_cv: KFold,
+    inner_fold_data: InnerFoldData,
     logfile: Path,
     logger: Logger,
     cfg: FixedParams,
@@ -186,19 +177,19 @@ def inner_cv_objective(
         "ffn_n_layers": trial.suggest_int("ffn_n_layers", 1, 5),
     }
 
-    n_inner_folds = inner_cv.get_n_splits()
-    for fold_id, (tr_idxs, va_idxs) in enumerate(inner_cv.split(range(len(dataset))), 1):
+    n_inner_folds = len(inner_fold_data)
+    for fold_id, fold_dict in enumerate(inner_fold_data, 1):
         logger.info(f"Inner Fold {fold_id}/{n_inner_folds} for trial {trial.number}...")
 
         pl_logger = CSVLogger(logfile) if fold_id == 1 else False
 
-        train_dset = Subset(dataset, tr_idxs)
-        val_dset = Subset(dataset, va_idxs)
+        train_dset: data.MoleculeDataset = fold_dict["train"]
+        val_dset: data.MoleculeDataset = fold_dict["val"]
 
-        train_loader, val_loader, scaler = make_dataloaders(train_dset, val_dset, cfg)
+        train_loader, val_loader = make_dataloaders(train_dset, val_dset, cfg)
 
         trainer = make_trainer(pl_logger, cfg, trial)
-        model = MPNNFactory(cfg).build(params, scaler)
+        model = MPNNFactory(cfg).build(params)
 
         logger.info("Start training")
 
@@ -218,7 +209,7 @@ def inner_cv_objective(
 
         if trial.should_prune():
             logger.info(f"Trial {trial.number} pruned at fold {fold_id}")
-            raise optuna.TrialPruned()
+            raise optuna.TrialPruned
 
         # Clear GPU mem post-trial
         if cfg.use_gpu and fold_id % 2 == 0:
@@ -228,18 +219,18 @@ def inner_cv_objective(
 
 
 def run_tuning_per_fold(
-    outer_train_dataset: Dataset, inner_cv: KFold, logger: Logger, logfile: Path, cfg: FixedParams
+    inner_fold_data: InnerFoldData, logger: Logger, logfile: Path, cfg: FixedParams
 ) -> dict[str, Any]:
     """Single-phase tuning on outer_train; final train/eval."""
     logger.info("Starting Single-Phase Tuning...")
 
     def obj(trial: optuna.Trial):
-        return inner_cv_objective(trial, outer_train_dataset, inner_cv, logfile, logger, cfg)
+        return inner_cv_objective(trial, inner_fold_data, logfile, logger, cfg)
 
     study = optuna.create_study(
         direction=cfg.opt_direction,
         sampler=optuna.samplers.TPESampler(seed=112),
-        pruner=optuna.pruners.HyperbandPruner(min_resource=2, max_resource=inner_cv.get_n_splits()),
+        pruner=optuna.pruners.HyperbandPruner(min_resource=2, max_resource=len(inner_fold_data)),
     )
 
     # study.enqueue_trial(INIT_PARAMS)  # Define an inital trial I want the study to run
@@ -277,15 +268,19 @@ def save_fold_result(
 
 
 def test_model(
-    train_dset: Dataset, test_dset: Dataset, best_params: dict[str, Any], logger: Logger, cfg: FixedParams
+    train_dset: data.MoleculeDataset,
+    test_dset: data.MoleculeDataset,
+    best_params: dict[str, Any],
+    logger: Logger,
+    cfg: FixedParams,
 ) -> tuple[MPNN, float, float]:
     # Final train on full outer_train
     logger.info("  Final Training on Outer Train...")
 
-    train_loader, test_loader, scaler = make_dataloaders(train_dset, test_dset, cfg)
+    train_loader, test_loader = make_dataloaders(train_dset, test_dset, cfg)
 
     trainer = make_trainer(logger=False, cfg=cfg)
-    mpnn = MPNNFactory(cfg).build(best_params, scaler)
+    mpnn = MPNNFactory(cfg).build(best_params)
 
     trainer.fit(mpnn, train_loader)
 
@@ -315,18 +310,16 @@ def main() -> None:
 
     logger: Logger = setup_logger(FILES.LOG_FILE)
 
-    full_dataset: data.MoleculeDataset = pd.read_pickle("data/chemprop_dataset1.pkl")
-    splits = pd.read_pickle(FILES.SPLITS_FILE)
+    logger.info(f"use GPU: {cfg.use_gpu}")
 
-    train_idxs, test_idxs = splits[fold_id]
+    outer_fold_data = torch.load(f"../data/folds_no_added/outer_fold_{fold_id}.pt", weights_only=False)
+    outer_train_dset = outer_fold_data["outer_train"]
+    outer_test_dset = outer_fold_data["outer_test"]
 
-    outer_train_dset = Subset(full_dataset, train_idxs)
-    outer_test_dset = Subset(full_dataset, test_idxs)
-
-    inner_cv = KFold(n_splits=5, shuffle=True, random_state=42)
+    inner_fold_data: InnerFoldData = outer_fold_data["inner_folds"]
 
     study_results = run_tuning_per_fold(
-        outer_train_dset, inner_cv=inner_cv, logger=logger, logfile=FILES.LIGHTNING_LOG_DIR, cfg=cfg
+        inner_fold_data=inner_fold_data, logger=logger, logfile=FILES.LIGHTNING_LOG_DIR, cfg=cfg
     )
     best_params = study_results["best_params"]
 

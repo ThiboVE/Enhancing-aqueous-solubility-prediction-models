@@ -283,34 +283,32 @@ def get_smiles_from_files(
     return target_df[target_df["id"].isin(ids)]["smiles"].tolist()
 
 
+def subset_features(
+    features: dict[str, pd.DataFrame | None],
+    smiles: list[str],
+) -> dict[str, pd.DataFrame | None]:
+    return {
+        key: df[df["original_smiles"].isin(smiles)].reset_index(drop=True) if df is not None else None
+        for key, df in features.items()
+    }
+
+
 def build_fold(
     train_files: np.ndarray,
     val_files: np.ndarray,
     target_df: pd.DataFrame,
-    loader: QuantumFPFileLoader,
+    all_features: dict[str, pd.DataFrame | None],
     *,
-    use_atom_features: bool = True,
-    use_bond_features: bool = False,
-    use_mol_features: bool = False,
     use_custom_atom_featurizer: bool = False,
     use_custom_bond_featurizer: bool = False,
     n_rbf_centers: int = 10,
     target_col: str = "solubility",
 ) -> tuple[MoleculeDataset, MoleculeDataset, StandardScaler]:
-    train_features = process_files(
-        train_files,
-        loader,
-        use_atom_features=use_atom_features,
-        use_bond_features=use_bond_features,
-        use_mol_features=use_mol_features,
-    )
-    val_features = process_files(
-        val_files,
-        loader,
-        use_atom_features=use_atom_features,
-        use_bond_features=use_bond_features,
-        use_mol_features=use_mol_features,
-    )
+    train_smiles = get_smiles_from_files(train_files, target_df)
+    val_smiles = get_smiles_from_files(val_files, target_df)
+
+    train_features = subset_features(all_features, train_smiles)
+    val_features = subset_features(all_features, val_smiles)
 
     train_atom_df = train_features["atoms"]
     val_atom_df = val_features["atoms"]
@@ -334,9 +332,6 @@ def build_fold(
 
     if train_mol_df is not None:
         train_mol_df, val_mol_df, _ = scale_features(train_mol_df, val_mol_df, mol_features)
-
-    train_smiles = get_smiles_from_files(train_files, target_df)
-    val_smiles = get_smiles_from_files(val_files, target_df)
 
     train_target_df = target_df[target_df["smiles"].isin(train_smiles)]
     val_target_df = target_df[target_df["smiles"].isin(val_smiles)]
@@ -378,7 +373,7 @@ def build_fold(
 def run_inner_loop(
     outer_train_files: np.ndarray,
     target_df: pd.DataFrame,
-    loader: QuantumFPFileLoader,
+    all_features: dict[str, pd.DataFrame | None],
     inner_cv: KFold,
     config: dict[str, bool | int | str],
 ) -> list[dict[str, MoleculeDataset | StandardScaler]]:
@@ -389,7 +384,7 @@ def run_inner_loop(
         inner_val_files = outer_train_files[inner_val_idxs]
 
         train_dataset, val_dataset, target_scaler = build_fold(
-            inner_train_files, inner_val_files, target_df, loader, **config
+            inner_train_files, inner_val_files, target_df, all_features, **config
         )
 
         inner_folds.append(
@@ -407,20 +402,20 @@ def build_and_save_fold(
     outer_fold: tuple[int, tuple[np.ndarray, np.ndarray]],
     used_files: np.ndarray,
     target_df: pd.DataFrame,
+    all_features: dict[str, pd.DataFrame | None],
     inner_cv: KFold,
     config: dict[str, bool | int | str],
     output_dir: Path,
 ) -> None:
     outer_idx, (tr_idxs, tst_idxs) = outer_fold
-    loader = QuantumFPFileLoader(Path("../data/QuantumFP/QFP_output"))
 
     outer_train_files = used_files[tr_idxs]
     outer_test_files = used_files[tst_idxs]
 
-    inner_folds = run_inner_loop(outer_train_files, target_df, loader, inner_cv, config)
+    inner_folds = run_inner_loop(outer_train_files, target_df, all_features, inner_cv, config)
 
     outer_train_dataset, outer_test_dataset, outer_target_scaler = build_fold(
-        outer_train_files, outer_test_files, target_df, loader, **config
+        outer_train_files, outer_test_files, target_df, all_features, **config
     )
 
     torch.save(
@@ -440,6 +435,7 @@ def run_outer_loop(
     outer_splits: list[tuple[np.ndarray, np.ndarray]],
     used_files: np.ndarray,
     target_df: pd.DataFrame,
+    all_features: dict[str, pd.DataFrame | None],
     inner_cv: KFold,
     config: dict[str, bool | int | str],
     output_dir: Path,
@@ -452,6 +448,7 @@ def run_outer_loop(
         n_jobs=5,
         used_files=used_files,
         target_df=target_df,
+        all_features=all_features,
         inner_cv=inner_cv,
         config=config,
         output_dir=output_dir,
@@ -482,10 +479,19 @@ def main() -> None:
         "target_col": "solubility",
     }
 
+    all_features = process_files(
+        used_files,
+        qfp_loader,
+        use_atom_features=config["use_atom_features"],
+        use_bond_features=config["use_bond_features"],
+        use_mol_features=config["use_mol_features"],
+    )
+
     run_outer_loop(
         outer_splits,
         used_files,
         df,
+        all_features,
         inner_cv,
         config,
         output_dir=Path("../data/folds_no_added"),
