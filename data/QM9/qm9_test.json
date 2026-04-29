@@ -1,7 +1,7 @@
 {
     "options": {
         "max_conformers": 32,
-        "max_microstates": 8,
+        "max_microstates": 0,
         "metadynamics": false
     },
     "runtime_options": {
