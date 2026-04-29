@@ -2,7 +2,6 @@ import re
 from collections import defaultdict
 from typing import Literal
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.patches import Patch
@@ -98,36 +97,38 @@ class FeatureImportance:
 
     def plot(
         self,
+        ax,
         num_features: int = 20,
         *,
-        save_fig: bool = False,
-        fig_name: str | None = None,
         color: str = "tab:blue",
     ) -> None:
-        """Plot the feature importance.
+        """Plot the feature importance on a given axis.
 
         params:
-            num_features (int): the top "n" features that are plotted
-            save_fig (bool): flag that tells the function whether the figure should be saved or not
-            fig_name (str): file name of the figure to be saved
-            color (str): name of the color used for the QM features
+            ax (matplotlib.axes.Axes): axis to plot on
+            num_features (int): top "n" features to plot
+            color (str): color for QM features
         """
         num_features = min(num_features, self.fi_df.shape[0])
 
         try:
             df = self.fi_df.head(num_features)
-
         except AttributeError:
-            print("Feature importance is not calculated, try running 'get_feature_importance' first.")
+            raise RuntimeError("Feature importance not calculated. Run 'get_feature_importance' first.")
 
         pattern = "|".join(get_topology_features())
-        topology_features: list[str] = [feature for feature in df["feature"] if re.search(pattern, feature)]
+        topology_features = [feature for feature in df["feature"] if re.search(pattern, feature)]
 
         colors = ["grey" if feature in topology_features else color for feature in df["feature"]]
         alphas = [0.6 if feature in topology_features else 1 for feature in df["feature"]]
 
-        plt.figure(figsize=(8, 6))
-        bars = plt.barh(df["feature"], df["score"].to_numpy(), color=colors, xerr=df["std_score"].to_numpy(), capsize=3)
+        bars = ax.barh(
+            df["feature"],
+            df["score"].to_numpy(),
+            color=colors,
+            xerr=df["std_score"].to_numpy(),
+            capsize=3,
+        )
 
         for bar, alpha in zip(bars, alphas, strict=True):
             bar.set_alpha(alpha)
@@ -137,30 +138,19 @@ class FeatureImportance:
             Patch(facecolor="grey", label="Topological feature", alpha=0.6),
         ]
 
-        ax = plt.gca()
-        yticks = ax.get_yticklabels()
-
-        for tick in yticks:
+        for tick in ax.get_yticklabels():
             tick.set_size(12)
             if tick.get_text() not in topology_features:
                 tick.set_fontweight("bold")
                 tick.set_color(color)
 
-        plt.gca().invert_yaxis()
+        ax.invert_yaxis()
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
 
-        plt.gca().spines["top"].set_visible(False)
-        plt.gca().spines["right"].set_visible(False)
-
-        plt.xlabel("Feature importance", fontsize=16)
-        plt.title(f"Top {num_features} most important features", fontsize=16)
-        plt.legend(handles=legend_elements, frameon=False, loc="lower right", fontsize=12)
-        plt.tight_layout()
-
-        if save_fig:
-            assert fig_name is not None, "No name for the figure is provided."
-            plt.savefig(fig_name, dpi=300)
-
-        plt.show()
+        ax.set_xlabel("Feature importance", fontsize=16)
+        # ax.set_title(f"Top {num_features} most important features", fontsize=16)
+        # ax.legend(handles=legend_elements, frameon=False, loc="lower right", fontsize=12)
 
     def _unwrap_estimator(self, estimator: BaseEstimator) -> tuple[BaseEstimator, np.ndarray | None, np.ndarray | None]:
         """Returns:

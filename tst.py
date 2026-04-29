@@ -2,11 +2,13 @@
 
 
 # def main() -> None:
-#     path = Path("1_KRR_combo_relevant")
+#     path = Path("1_RF_topo/results")
 #     for obj in path.glob("*"):
 #         name = obj.name
 #         parts = name.split("_")
-#         parts[4] = f"id={parts[4]}"
+
+#         idx = 3
+#         parts[idx] = f"id={parts[idx]}"
 #         new_name = "_".join(parts)
 
 #         obj.rename(obj.parent / new_name)
@@ -14,4 +16,5 @@
 
 # if __name__ == "__main__":
 #     main()
+
 
