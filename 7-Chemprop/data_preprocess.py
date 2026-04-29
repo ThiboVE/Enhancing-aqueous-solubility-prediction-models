@@ -238,7 +238,7 @@ def make_datapoints(
             else None
         )
         x_d = (
-            mol_df[mol_df["original_smiles"] == smiles][mol_features].to_numpy(dtype=float).squeeze()
+            np.atleast_1d(mol_df[mol_df["original_smiles"] == smiles][mol_features].to_numpy(dtype=float).squeeze())
             if mol_df is not None
             else None
         )
@@ -255,6 +255,8 @@ def get_featurizer(
     *,
     use_custom_atom_featurizer: bool = False,
     use_custom_bond_featurizer: bool = False,
+    extra_atom_fdim: int = 0,
+    extra_bond_fdim: int = 0,
 ) -> SimpleMoleculeMolGraphFeaturizer:
     if use_custom_atom_featurizer:
         # These represent all atoms present in the processed dataset "processed_dataset_wo_metals_w_even_more_qm2.csv"
@@ -287,8 +289,8 @@ def get_featurizer(
     return SimpleMoleculeMolGraphFeaturizer(
         atom_featurizer=atom_featurizer,
         bond_featurizer=bond_featurizer,
-        extra_atom_fdim=len(atomic_features),
-        extra_bond_fdim=len(bond_features),
+        extra_atom_fdim=extra_atom_fdim,
+        extra_bond_fdim=extra_bond_fdim,
     )
 
 
@@ -375,7 +377,10 @@ def build_fold(
     )
 
     featurizer = get_featurizer(
-        use_custom_atom_featurizer=use_custom_atom_featurizer, use_custom_bond_featurizer=use_custom_bond_featurizer
+        use_custom_atom_featurizer=use_custom_atom_featurizer,
+        use_custom_bond_featurizer=use_custom_bond_featurizer,
+        extra_atom_fdim=len(atom_rbf_cols) if train_atom_df is not None else 0,
+        extra_bond_fdim=len(bond_rbf_cols) if train_bond_df is not None else 0,
     )
     return (
         MoleculeDataset(train_datapoints, featurizer=featurizer),
