@@ -1,5 +1,6 @@
 import re
 from collections.abc import Generator, Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +17,18 @@ from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
 
 from ml_enhance import QuantumFPFileLoader, parallelize
+
+
+@dataclass
+class Config:
+    use_atom_features: bool = False
+    use_bond_features: bool = False
+    use_mol_features: bool = False
+    use_custom_atom_featurizer: bool = True
+    use_custom_bond_featurizer: bool = False
+    n_rbf_centers: int = 10
+    target_col: str = "solubility"
+
 
 atomic_features: list[str] = [
     "atomic_fukui_minus",
@@ -244,7 +257,8 @@ def get_featurizer(
     use_custom_bond_featurizer: bool = False,
 ) -> SimpleMoleculeMolGraphFeaturizer:
     if use_custom_atom_featurizer:
-        atomic_nums = list(range(1, 37)) + [53]  # Look up which atomic numbers occur in the dataset
+        # These represent all atoms present in the processed dataset "processed_dataset_wo_metals_w_even_more_qm2.csv"
+        atomic_nums = [1, 5, 6, 7, 8, 9, 13, 14, 15, 16, 17, 35, 53]
         degrees = [0, 1, 2, 3, 4, 5]
         formal_charges = []
         chiral_tags = [0, 1, 2, 3]
@@ -265,7 +279,10 @@ def get_featurizer(
     else:
         atom_featurizer = MultiHotAtomFeaturizer.v2()
 
-    bond_featurizer = MultiHotBondFeaturizer() if not use_custom_bond_featurizer else None
+    if use_custom_bond_featurizer:
+        raise NotImplementedError
+
+    bond_featurizer = MultiHotBondFeaturizer()
 
     return SimpleMoleculeMolGraphFeaturizer(
         atom_featurizer=atom_featurizer,
@@ -375,7 +392,7 @@ def run_inner_loop(
     target_df: pd.DataFrame,
     all_features: dict[str, pd.DataFrame | None],
     inner_cv: KFold,
-    config: dict[str, bool | int | str],
+    config: Config,
 ) -> list[dict[str, MoleculeDataset | StandardScaler]]:
     inner_folds: list[dict[str, MoleculeDataset | StandardScaler]] = []
 
@@ -384,7 +401,14 @@ def run_inner_loop(
         inner_val_files = outer_train_files[inner_val_idxs]
 
         train_dataset, val_dataset, target_scaler = build_fold(
-            inner_train_files, inner_val_files, target_df, all_features, **config
+            inner_train_files,
+            inner_val_files,
+            target_df,
+            all_features,
+            use_custom_atom_featurizer=config.use_custom_atom_featurizer,
+            use_custom_bond_featurizer=config.use_custom_bond_featurizer,
+            n_rbf_centers=config.n_rbf_centers,
+            target_col=config.target_col,
         )
 
         inner_folds.append(
@@ -404,7 +428,7 @@ def build_and_save_fold(
     target_df: pd.DataFrame,
     all_features: dict[str, pd.DataFrame | None],
     inner_cv: KFold,
-    config: dict[str, bool | int | str],
+    config: Config,
     output_dir: Path,
 ) -> None:
     outer_idx, (tr_idxs, tst_idxs) = outer_fold
@@ -415,7 +439,14 @@ def build_and_save_fold(
     inner_folds = run_inner_loop(outer_train_files, target_df, all_features, inner_cv, config)
 
     outer_train_dataset, outer_test_dataset, outer_target_scaler = build_fold(
-        outer_train_files, outer_test_files, target_df, all_features, **config
+        outer_train_files,
+        outer_test_files,
+        target_df,
+        all_features,
+        use_custom_atom_featurizer=config.use_custom_atom_featurizer,
+        use_custom_bond_featurizer=config.use_custom_bond_featurizer,
+        n_rbf_centers=config.n_rbf_centers,
+        target_col=config.target_col,
     )
 
     torch.save(
@@ -437,7 +468,7 @@ def run_outer_loop(
     target_df: pd.DataFrame,
     all_features: dict[str, pd.DataFrame | None],
     inner_cv: KFold,
-    config: dict[str, bool | int | str],
+    config: Config,
     output_dir: Path,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -469,22 +500,14 @@ def main() -> None:
     outer_splits = pd.read_pickle("../hpc_splits.pkl")
     inner_cv = KFold(n_splits=5, shuffle=True, random_state=42)
 
-    config = {
-        "use_atom_features": False,
-        "use_bond_features": False,
-        "use_mol_features": False,
-        "use_custom_atom_featurizer": False,
-        "use_custom_bond_featurizer": False,
-        "n_rbf_centers": 10,
-        "target_col": "solubility",
-    }
+    config = Config()
 
     all_features = process_files(
         used_files,
         qfp_loader,
-        use_atom_features=config["use_atom_features"],
-        use_bond_features=config["use_bond_features"],
-        use_mol_features=config["use_mol_features"],
+        use_atom_features=config.use_atom_features,
+        use_bond_features=config.use_bond_features,
+        use_mol_features=config.use_mol_features,
     )
 
     run_outer_loop(
