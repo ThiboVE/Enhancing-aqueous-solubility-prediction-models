@@ -18,6 +18,8 @@ dependencies = [
     "seaborn>=0.13.2",
     "pingouin>=0.6.1",
     "torch>=2.11.0",
+    "torch-geometric>=2.7.0",
+    "shap>=0.51.0",
 ]
 
 [project.optional-dependencies]
