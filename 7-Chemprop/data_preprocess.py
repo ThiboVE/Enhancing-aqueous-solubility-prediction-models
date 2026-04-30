@@ -21,7 +21,7 @@ from ml_enhance import QuantumFPFileLoader, parallelize
 
 @dataclass
 class Config:
-    use_atom_features: bool = False
+    use_atom_features: bool = True
     use_bond_features: bool = False
     use_mol_features: bool = False
     use_custom_atom_featurizer: bool = True
@@ -63,9 +63,9 @@ def stream_conformer_df(
     file: Path,
     loader: QuantumFPFileLoader,
 ) -> Generator[pd.DataFrame, None, None]:
-    for sdf in loader.stream_conformer_dataframe(file):
-        sdf["gibbs_free_energy_300K"] = sdf["gibbs_free_energy"].map(lambda x: x[1][1])
-        yield sdf
+    for df in loader.stream_conformer_dataframe(file):
+        df["gibbs_free_energy_300K"] = df["gibbs_free_energy"].map(lambda x: x[1][1])
+        yield df
 
 
 # ── boltzmann averaging ───────────────────────────────────────────────────────
@@ -81,12 +81,12 @@ def boltzmann_weights(G: np.ndarray, T: float = 300.0) -> np.ndarray:
 # ── feature extraction ────────────────────────────────────────────────────────
 
 
-def extract_atom_features(sdf: pd.DataFrame) -> pd.DataFrame:
-    tdf = sdf[["original_smiles", "gibbs_free_energy_300K", *atomic_features]]
-    object_cols = tdf.select_dtypes(include="object").columns.to_list()
-    exploded_df = tdf.explode(object_cols)
+def extract_atom_features(df: pd.DataFrame) -> pd.DataFrame:
+    selected_df = df[["original_smiles", "gibbs_free_energy_300K", *atomic_features]]
+    object_cols = selected_df.select_dtypes(include="object").columns.to_list()
+    exploded_df = selected_df.explode(object_cols)
 
-    G = tdf["gibbs_free_energy_300K"].unique()
+    G = selected_df["gibbs_free_energy_300K"].unique()
     weights = boltzmann_weights(G)
 
     arr = np.array(exploded_df[object_cols].values.tolist())  # (n_conformers * n_atoms, n_features, 2)
@@ -102,7 +102,7 @@ def extract_atom_features(sdf: pd.DataFrame) -> pd.DataFrame:
 
     result = pd.DataFrame(averages, columns=object_cols)
     result.insert(0, "atom", np.unique(atom_idx))
-    result.insert(0, "original_smiles", tdf["original_smiles"].iloc[0])
+    result.insert(0, "original_smiles", selected_df["original_smiles"].iloc[0])
 
     return result
 
@@ -312,7 +312,7 @@ def subset_features(
     }
 
 
-def build_fold(
+def build_datasets(
     train_files: np.ndarray,
     val_files: np.ndarray,
     target_df: pd.DataFrame,
@@ -331,29 +331,31 @@ def build_fold(
 
     train_atom_df = train_features["atoms"]
     val_atom_df = val_features["atoms"]
+
     train_bond_df = train_features["bonds"]
     val_bond_df = val_features["bonds"]
+
     train_mol_df = train_features["mols"]
     val_mol_df = val_features["mols"]
+
+    train_target_df = target_df[target_df["smiles"].isin(train_smiles)]
+    val_target_df = target_df[target_df["smiles"].isin(val_smiles)]
 
     atom_rbf_cols: list[str] = []
     bond_rbf_cols: list[str] = []
 
-    if train_atom_df is not None:
+    if (train_atom_df is not None) and (val_atom_df is not None):
         train_atom_df, val_atom_df, _ = scale_features(train_atom_df, val_atom_df, atomic_features)
         train_atom_df, atom_rbf_cols = apply_rbf(train_atom_df, atomic_features, n_rbf_centers)
         val_atom_df, _ = apply_rbf(val_atom_df, atomic_features, n_rbf_centers)
 
-    if train_bond_df is not None:
+    if (train_bond_df is not None) and (val_bond_df is not None):
         train_bond_df, val_bond_df, _ = scale_features(train_bond_df, val_bond_df, bond_features)
         train_bond_df, bond_rbf_cols = apply_rbf(train_bond_df, bond_features, n_rbf_centers)
         val_bond_df, _ = apply_rbf(val_bond_df, bond_features, n_rbf_centers)
 
-    if train_mol_df is not None:
+    if (train_mol_df is not None) and (val_mol_df is not None):
         train_mol_df, val_mol_df, _ = scale_features(train_mol_df, val_mol_df, mol_features)
-
-    train_target_df = target_df[target_df["smiles"].isin(train_smiles)]
-    val_target_df = target_df[target_df["smiles"].isin(val_smiles)]
 
     train_target_df, val_target_df, target_scaler = scale_target(train_target_df, val_target_df, target_col)
 
@@ -405,7 +407,7 @@ def run_inner_loop(
         inner_train_files = outer_train_files[inner_tr_idxs]
         inner_val_files = outer_train_files[inner_val_idxs]
 
-        train_dataset, val_dataset, target_scaler = build_fold(
+        train_dataset, val_dataset, target_scaler = build_datasets(
             inner_train_files,
             inner_val_files,
             target_df,
@@ -443,7 +445,7 @@ def build_and_save_fold(
 
     inner_folds = run_inner_loop(outer_train_files, target_df, all_features, inner_cv, config)
 
-    outer_train_dataset, outer_test_dataset, outer_target_scaler = build_fold(
+    outer_train_dataset, outer_test_dataset, outer_target_scaler = build_datasets(
         outer_train_files,
         outer_test_files,
         target_df,
@@ -495,8 +497,8 @@ def run_outer_loop(
 
 
 def main() -> None:
-    df = pd.read_csv("../data/processed_dataset_wo_metals_w_even_more_qm2.csv")
-    used_ids: list[int] = df["id"].apply(round).to_list()
+    target_df = pd.read_csv("../data/processed_dataset_wo_metals_w_even_more_qm2.csv")
+    used_ids: list[int] = target_df["id"].apply(round).to_list()
 
     qfp_loader = QuantumFPFileLoader(Path("../data/QuantumFP/QFP_output"))
     filelist: list[Path] = qfp_loader.list_output_files()
@@ -518,7 +520,7 @@ def main() -> None:
     run_outer_loop(
         outer_splits,
         used_files,
-        df,
+        target_df,
         all_features,
         inner_cv,
         config,
