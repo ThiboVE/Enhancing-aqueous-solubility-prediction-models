@@ -8,6 +8,7 @@ import pandas as pd
 import torch
 from chemprop.data import MoleculeDatapoint, MoleculeDataset
 from chemprop.featurizers import MultiHotAtomFeaturizer, MultiHotBondFeaturizer, SimpleMoleculeMolGraphFeaturizer
+from rdkit import Chem
 from rdkit.Chem.rdchem import HybridizationType
 from scipy.constants import (
     Avogadro,  # 1/mol
@@ -81,6 +82,20 @@ def boltzmann_weights(G: np.ndarray, T: float = 300.0) -> np.ndarray:
 # ── feature extraction ────────────────────────────────────────────────────────
 
 
+def reorder_atom_features(molecule_df: pd.DataFrame) -> pd.DataFrame:
+    """The atom features are ordered according to the map number of each atom (atom.GetAtomMapNum()), however, Chemprop uses the atom index (atom.GetIdx()) to order features.
+
+    These two (map number and index) are not always the same, so the atoms in the DataFrame need to be reordered.
+    """
+    mol = Chem.MolFromSmiles(
+        molecule_df.loc[0, "original_smiles"], sanitize=False
+    )  # sanitize=False => keep the H atoms
+
+    mapnum_order = [atom.GetAtomMapNum() - 1 for atom in mol.GetAtoms()]
+
+    return molecule_df.iloc[mapnum_order]
+
+
 def extract_atom_features(df: pd.DataFrame) -> pd.DataFrame:
     selected_df = df[["original_smiles", "gibbs_free_energy_300K", *atomic_features]]
     object_cols = selected_df.select_dtypes(include="object").columns.to_list()
@@ -90,30 +105,36 @@ def extract_atom_features(df: pd.DataFrame) -> pd.DataFrame:
     weights = boltzmann_weights(G)
 
     arr = np.array(exploded_df[object_cols].values.tolist())  # (n_conformers * n_atoms, n_features, 2)
-    atom_idx = arr[:, 0, 0].astype(int)
+    atom_map_idx = arr[:, 0, 0].astype(int)
     values = arr[:, :, 1].astype(float)
 
     n_conformers = len(weights)
-    n_atoms = len(np.unique(atom_idx))
+    n_atoms = len(np.unique(atom_map_idx))
     n_features = len(object_cols)
 
     atom_matrix = values.reshape(n_conformers, n_atoms, n_features)
     averages = np.einsum("i,ijk->jk", weights, atom_matrix)
 
     result = pd.DataFrame(averages, columns=object_cols)
-    result.insert(0, "atom", np.unique(atom_idx))
+    result.insert(0, "atom", np.unique(atom_map_idx))
     result.insert(0, "original_smiles", selected_df["original_smiles"].iloc[0])
 
-    return result
+    return reorder_atom_features(result)
 
 
-def extract_bond_features(sdf: pd.DataFrame) -> pd.DataFrame:
+def extract_bond_features(df: pd.DataFrame) -> pd.DataFrame:
     # TODO: implement bond feature extraction
+    selected_df = df[["original_smiles", "gibbs_free_energy_300K", *bond_features]]
+    object_cols = selected_df.select_dtypes(include="object").columns.to_list()
+    exploded_df = selected_df.explode(object_cols)
+
+    # TODO: Should filter the rows that are valid bonds, because now the bond features also have non bonding atom pairs
+
     # should return df with columns: original_smiles, bond, *bond_features
     raise NotImplementedError
 
 
-def extract_mol_features(sdf: pd.DataFrame) -> pd.DataFrame:
+def extract_mol_features(df: pd.DataFrame) -> pd.DataFrame:
     # TODO: implement molecular feature extraction
     # should return df with columns: original_smiles, *mol_features
     raise NotImplementedError
