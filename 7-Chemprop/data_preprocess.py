@@ -8,6 +8,7 @@ import pandas as pd
 import torch
 from chemprop.data import MoleculeDatapoint, MoleculeDataset
 from chemprop.featurizers import MultiHotAtomFeaturizer, MultiHotBondFeaturizer, SimpleMoleculeMolGraphFeaturizer
+from rdkit import Chem
 from rdkit.Chem.rdchem import HybridizationType
 from scipy.constants import (
     Avogadro,  # 1/mol
@@ -21,7 +22,7 @@ from ml_enhance import QuantumFPFileLoader, parallelize
 
 @dataclass
 class Config:
-    use_atom_features: bool = False
+    use_atom_features: bool = True
     use_bond_features: bool = False
     use_mol_features: bool = False
     use_custom_atom_featurizer: bool = True
@@ -42,8 +43,19 @@ atomic_features: list[str] = [
     "partial_charge",
 ]
 
-bond_features: list[str] = []  # TODO: fill in bond feature column names
-mol_features: list[str] = []  # TODO: fill in molecular feature column names
+bond_features: list[str] = [
+    "bond_length",
+    "bond_stiffness",
+    "bond_energy",
+    "nuclear_repulsion",
+    "atomic_charge_dipole_interaction",
+    "atomic_charge_quadrupole_interaction",
+    "atomic_dipole_dipole_interaction",
+]
+
+mol_features: list[str] = [
+    "molecular_dipole_norm",
+]  # TODO: fill in molecular feature column names
 
 
 def filter_files(files: Iterable[Path], used_ids: list[int]) -> list[Path]:
@@ -63,9 +75,9 @@ def stream_conformer_df(
     file: Path,
     loader: QuantumFPFileLoader,
 ) -> Generator[pd.DataFrame, None, None]:
-    for sdf in loader.stream_conformer_dataframe(file):
-        sdf["gibbs_free_energy_300K"] = sdf["gibbs_free_energy"].map(lambda x: x[1][1])
-        yield sdf
+    for df in loader.stream_conformer_dataframe(file):
+        df["gibbs_free_energy_300K"] = df["gibbs_free_energy"].map(lambda x: x[1][1])
+        yield df
 
 
 # ── boltzmann averaging ───────────────────────────────────────────────────────
@@ -81,42 +93,132 @@ def boltzmann_weights(G: np.ndarray, T: float = 300.0) -> np.ndarray:
 # ── feature extraction ────────────────────────────────────────────────────────
 
 
-def extract_atom_features(sdf: pd.DataFrame) -> pd.DataFrame:
-    tdf = sdf[["original_smiles", "gibbs_free_energy_300K", *atomic_features]]
-    object_cols = tdf.select_dtypes(include="object").columns.to_list()
-    exploded_df = tdf.explode(object_cols)
+def reorder_atom_features(molecule_df: pd.DataFrame) -> pd.DataFrame:
+    """The atom features are ordered according to the map number of each atom (atom.GetAtomMapNum()), however, Chemprop uses the atom index (atom.GetIdx()) to order features.
 
-    G = tdf["gibbs_free_energy_300K"].unique()
+    These two (map number and index) are not always the same, so the atoms in the DataFrame need to be reordered.
+    """
+    mol = Chem.MolFromSmiles(
+        molecule_df.loc[0, "original_smiles"], sanitize=False
+    )  # sanitize=False => keep the H atoms
+
+    mapnum_order = [atom.GetAtomMapNum() - 1 for atom in mol.GetAtoms()]
+
+    return molecule_df.iloc[mapnum_order]
+
+
+def get_bond_mapping(smiles: str) -> dict[tuple[int, int], int]:
+    mol = Chem.MolFromSmiles(smiles, sanitize=False)
+
+    return {
+        (bond.GetBeginAtom().GetAtomMapNum(), bond.GetEndAtom().GetAtomMapNum()): bond.GetIdx()
+        for bond in mol.GetBonds()
+    }
+
+
+def filter_bond_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Some of the bond features (such as the interaction features) contain more pairs than there are bonds.
+
+    Filter them out.
+    """
+    bond_atom_pairs = get_bond_mapping(df.loc[0, "original_smiles"]).keys()
+
+    def filter_list(lst: list[int | float]) -> list[int | float]:
+        return [x for x in lst if (x[0], x[1]) in bond_atom_pairs]
+
+    for col in bond_features:
+        df[col] = df[col].apply(filter_list)
+
+    return df
+
+
+def get_bond_idx(smiles: str, begin_atom_idxs: np.ndarray, end_atom_idxs: np.ndarray) -> np.ndarray:
+    """The atoms are denoted with their map indices, which are not used in chemprop. Chemprop uses the bond index and iterates over the bond indices from 0 onward.
+
+    => Provide a mapping between atom map index pairs and the bond index, e.g. (1, 2): 1
+    """
+    mapping = get_bond_mapping(smiles)
+
+    return np.array(
+        [mapping[(begin_idx, end_idx)] for begin_idx, end_idx in zip(begin_atom_idxs, end_atom_idxs, strict=True)]
+    )
+
+
+def extract_atom_features(df: pd.DataFrame) -> pd.DataFrame:
+    selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *atomic_features]]
+    exploded_df = selected_df.explode(atomic_features)
+
+    G = selected_df["gibbs_free_energy_300K"].unique()
     weights = boltzmann_weights(G)
 
-    arr = np.array(exploded_df[object_cols].values.tolist())  # (n_conformers * n_atoms, n_features, 2)
-    atom_idx = arr[:, 0, 0].astype(int)
+    arr = np.array(exploded_df[atomic_features].values.tolist())  # (n_conformers * n_atoms, n_features, 2)
+    atom_map_idx = arr[:, 0, 0].astype(int)
     values = arr[:, :, 1].astype(float)
 
+    unique_atom_idxs = pd.unique(atom_map_idx)
+
     n_conformers = len(weights)
-    n_atoms = len(np.unique(atom_idx))
-    n_features = len(object_cols)
+    n_atoms = len(unique_atom_idxs)
+    n_features = len(atomic_features)
 
     atom_matrix = values.reshape(n_conformers, n_atoms, n_features)
     averages = np.einsum("i,ijk->jk", weights, atom_matrix)
 
-    result = pd.DataFrame(averages, columns=object_cols)
-    result.insert(0, "atom", np.unique(atom_idx))
-    result.insert(0, "original_smiles", tdf["original_smiles"].iloc[0])
+    result = pd.DataFrame(averages, columns=atomic_features)
+    result.insert(0, "atom_map_idx", unique_atom_idxs)
+    result.insert(0, "original_smiles", selected_df["original_smiles"].iloc[0])
+
+    return reorder_atom_features(result)
+
+
+def extract_bond_features(df: pd.DataFrame) -> pd.DataFrame:
+    selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *bond_features]]
+    selected_df = filter_bond_features(selected_df)
+    exploded_df = selected_df.explode(bond_features)
+
+    # exploded_df["smiles_equal"] = exploded_df["original_smiles"] == exploded_df["output_smiles"]
+
+    G = selected_df["gibbs_free_energy_300K"].unique()
+    weights = boltzmann_weights(G)
+
+    arr = np.array(exploded_df[bond_features].values.tolist())  # (n_conformers * n_bonds, n_features, 3)
+
+    begin_atom_map_idx = arr[:, 0, 0].astype(int)
+    end_atom_map_idx = arr[:, 0, 1].astype(int)
+    values = arr[:, :, -1].astype(float)
+
+    bond_idx = get_bond_idx(exploded_df["original_smiles"].values[0], begin_atom_map_idx, end_atom_map_idx)
+
+    unique_bond_idxs = pd.unique(bond_idx)
+
+    n_conformers = len(weights)
+    n_bonds = len(unique_bond_idxs)
+    n_features = len(bond_features)
+
+    bond_matrix = values.reshape(n_conformers, n_bonds, n_features)
+    averages = np.einsum("i,ijk->jk", weights, bond_matrix)
+
+    result = pd.DataFrame(averages, columns=bond_features)
+    result.insert(0, "bond_idx", unique_bond_idxs)
+    result.insert(0, "original_smiles", selected_df["original_smiles"].iloc[0])
+
+    return result.sort_values("bond_idx")
+
+
+def extract_mol_features(df: pd.DataFrame) -> pd.DataFrame:
+    selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *mol_features]]
+
+    G = selected_df["gibbs_free_energy_300K"].unique()
+    weights = boltzmann_weights(G)
+
+    arr = selected_df[mol_features].to_numpy()  # (n_conformers, n_features)
+
+    averages = np.einsum("i,ij->j", weights, arr)
+
+    result = pd.DataFrame(averages, columns=mol_features)
+    result.insert(0, "original_smiles", selected_df["original_smiles"].iloc[0])
 
     return result
-
-
-def extract_bond_features(sdf: pd.DataFrame) -> pd.DataFrame:
-    # TODO: implement bond feature extraction
-    # should return df with columns: original_smiles, bond, *bond_features
-    raise NotImplementedError
-
-
-def extract_mol_features(sdf: pd.DataFrame) -> pd.DataFrame:
-    # TODO: implement molecular feature extraction
-    # should return df with columns: original_smiles, *mol_features
-    raise NotImplementedError
 
 
 # ── file processing ───────────────────────────────────────────────────────────
@@ -312,7 +414,7 @@ def subset_features(
     }
 
 
-def build_fold(
+def build_datasets(
     train_files: np.ndarray,
     val_files: np.ndarray,
     target_df: pd.DataFrame,
@@ -331,29 +433,31 @@ def build_fold(
 
     train_atom_df = train_features["atoms"]
     val_atom_df = val_features["atoms"]
+
     train_bond_df = train_features["bonds"]
     val_bond_df = val_features["bonds"]
+
     train_mol_df = train_features["mols"]
     val_mol_df = val_features["mols"]
+
+    train_target_df = target_df[target_df["smiles"].isin(train_smiles)]
+    val_target_df = target_df[target_df["smiles"].isin(val_smiles)]
 
     atom_rbf_cols: list[str] = []
     bond_rbf_cols: list[str] = []
 
-    if train_atom_df is not None:
+    if (train_atom_df is not None) and (val_atom_df is not None):
         train_atom_df, val_atom_df, _ = scale_features(train_atom_df, val_atom_df, atomic_features)
         train_atom_df, atom_rbf_cols = apply_rbf(train_atom_df, atomic_features, n_rbf_centers)
         val_atom_df, _ = apply_rbf(val_atom_df, atomic_features, n_rbf_centers)
 
-    if train_bond_df is not None:
+    if (train_bond_df is not None) and (val_bond_df is not None):
         train_bond_df, val_bond_df, _ = scale_features(train_bond_df, val_bond_df, bond_features)
         train_bond_df, bond_rbf_cols = apply_rbf(train_bond_df, bond_features, n_rbf_centers)
         val_bond_df, _ = apply_rbf(val_bond_df, bond_features, n_rbf_centers)
 
-    if train_mol_df is not None:
+    if (train_mol_df is not None) and (val_mol_df is not None):
         train_mol_df, val_mol_df, _ = scale_features(train_mol_df, val_mol_df, mol_features)
-
-    train_target_df = target_df[target_df["smiles"].isin(train_smiles)]
-    val_target_df = target_df[target_df["smiles"].isin(val_smiles)]
 
     train_target_df, val_target_df, target_scaler = scale_target(train_target_df, val_target_df, target_col)
 
@@ -405,7 +509,7 @@ def run_inner_loop(
         inner_train_files = outer_train_files[inner_tr_idxs]
         inner_val_files = outer_train_files[inner_val_idxs]
 
-        train_dataset, val_dataset, target_scaler = build_fold(
+        train_dataset, val_dataset, target_scaler = build_datasets(
             inner_train_files,
             inner_val_files,
             target_df,
@@ -443,7 +547,7 @@ def build_and_save_fold(
 
     inner_folds = run_inner_loop(outer_train_files, target_df, all_features, inner_cv, config)
 
-    outer_train_dataset, outer_test_dataset, outer_target_scaler = build_fold(
+    outer_train_dataset, outer_test_dataset, outer_target_scaler = build_datasets(
         outer_train_files,
         outer_test_files,
         target_df,
@@ -495,8 +599,8 @@ def run_outer_loop(
 
 
 def main() -> None:
-    df = pd.read_csv("../data/processed_dataset_wo_metals_w_even_more_qm2.csv")
-    used_ids: list[int] = df["id"].apply(round).to_list()
+    target_df = pd.read_csv("../data/processed_dataset_wo_metals_w_even_more_qm2.csv")
+    used_ids: list[int] = target_df["id"].apply(round).to_list()
 
     qfp_loader = QuantumFPFileLoader(Path("../data/QuantumFP/QFP_output"))
     filelist: list[Path] = qfp_loader.list_output_files()
@@ -518,7 +622,7 @@ def main() -> None:
     run_outer_loop(
         outer_splits,
         used_files,
-        df,
+        target_df,
         all_features,
         inner_cv,
         config,
