@@ -45,8 +45,14 @@ atomic_features: list[str] = [
 
 bond_features: list[str] = [
     "bond_length",
+    "bond_stiffness",
+    "bond_energy",
+    "nuclear_repulsion",
+    "atomic_charge_dipole_interaction",
     "atomic_charge_quadrupole_interaction",
-]  # TODO: fill in bond feature column names
+    "atomic_dipole_dipole_interaction",
+]
+
 mol_features: list[str] = [
     "molecular_dipole_norm",
 ]  # TODO: fill in molecular feature column names
