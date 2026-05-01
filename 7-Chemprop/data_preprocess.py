@@ -45,6 +45,7 @@ atomic_features: list[str] = [
 
 bond_features: list[str] = [
     "bond_length",
+    "atomic_charge_quadrupole_interaction",
 ]  # TODO: fill in bond feature column names
 mol_features: list[str] = [
     "molecular_dipole_norm",
@@ -100,17 +101,37 @@ def reorder_atom_features(molecule_df: pd.DataFrame) -> pd.DataFrame:
     return molecule_df.iloc[mapnum_order]
 
 
+def get_bond_mapping(smiles: str) -> dict[tuple[int, int], int]:
+    mol = Chem.MolFromSmiles(smiles, sanitize=False)
+
+    return {
+        (bond.GetBeginAtom().GetAtomMapNum(), bond.GetEndAtom().GetAtomMapNum()): bond.GetIdx()
+        for bond in mol.GetBonds()
+    }
+
+
+def filter_bond_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Some of the bond features (such as the interaction features) contain more pairs than there are bonds.
+
+    Filter them out.
+    """
+    bond_atom_pairs = get_bond_mapping(df.loc[0, "original_smiles"]).keys()
+
+    def filter_list(lst: list[int | float]) -> list[int | float]:
+        return [x for x in lst if (x[0], x[1]) in bond_atom_pairs]
+
+    for col in bond_features:
+        df[col] = df[col].apply(filter_list)
+
+    return df
+
+
 def get_bond_idx(smiles: str, begin_atom_idxs: np.ndarray, end_atom_idxs: np.ndarray) -> np.ndarray:
     """The atoms are denoted with their map indices, which are not used in chemprop. Chemprop uses the bond index and iterates over the bond indices from 0 onward.
 
     => Provide a mapping between atom map index pairs and the bond index, e.g. (1, 2): 1
     """
-    mol = Chem.MolFromSmiles(smiles, sanitize=False)
-
-    mapping = {
-        (bond.GetBeginAtom().GetAtomMapNum(), bond.GetEndAtom().GetAtomMapNum()): bond.GetIdx()
-        for bond in mol.GetBonds()
-    }
+    mapping = get_bond_mapping(smiles)
 
     return np.array(
         [mapping[(begin_idx, end_idx)] for begin_idx, end_idx in zip(begin_atom_idxs, end_atom_idxs, strict=True)]
@@ -146,6 +167,7 @@ def extract_atom_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def extract_bond_features(df: pd.DataFrame) -> pd.DataFrame:
     selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *bond_features]]
+    selected_df = filter_bond_features(selected_df)
     exploded_df = selected_df.explode(bond_features)
 
     # exploded_df["smiles_equal"] = exploded_df["original_smiles"] == exploded_df["output_smiles"]
