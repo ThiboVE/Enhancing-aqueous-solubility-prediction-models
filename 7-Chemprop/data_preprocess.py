@@ -43,8 +43,12 @@ atomic_features: list[str] = [
     "partial_charge",
 ]
 
-bond_features: list[str] = []  # TODO: fill in bond feature column names
-mol_features: list[str] = []  # TODO: fill in molecular feature column names
+bond_features: list[str] = [
+    "bond_length",
+]  # TODO: fill in bond feature column names
+mol_features: list[str] = [
+    "molecular_dipole_norm",
+]  # TODO: fill in molecular feature column names
 
 
 def filter_files(files: Iterable[Path], used_ids: list[int]) -> list[Path]:
@@ -115,13 +119,12 @@ def get_bond_idx(smiles: str, begin_atom_idxs: np.ndarray, end_atom_idxs: np.nda
 
 def extract_atom_features(df: pd.DataFrame) -> pd.DataFrame:
     selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *atomic_features]]
-    object_cols = selected_df.select_dtypes(include="object").columns.to_list()
-    exploded_df = selected_df.explode(object_cols)
+    exploded_df = selected_df.explode(atomic_features)
 
     G = selected_df["gibbs_free_energy_300K"].unique()
     weights = boltzmann_weights(G)
 
-    arr = np.array(exploded_df[object_cols].values.tolist())  # (n_conformers * n_atoms, n_features, 2)
+    arr = np.array(exploded_df[atomic_features].values.tolist())  # (n_conformers * n_atoms, n_features, 2)
     atom_map_idx = arr[:, 0, 0].astype(int)
     values = arr[:, :, 1].astype(float)
 
@@ -129,12 +132,12 @@ def extract_atom_features(df: pd.DataFrame) -> pd.DataFrame:
 
     n_conformers = len(weights)
     n_atoms = len(unique_atom_idxs)
-    n_features = len(object_cols)
+    n_features = len(atomic_features)
 
     atom_matrix = values.reshape(n_conformers, n_atoms, n_features)
     averages = np.einsum("i,ijk->jk", weights, atom_matrix)
 
-    result = pd.DataFrame(averages, columns=object_cols)
+    result = pd.DataFrame(averages, columns=atomic_features)
     result.insert(0, "atom_map_idx", unique_atom_idxs)
     result.insert(0, "original_smiles", selected_df["original_smiles"].iloc[0])
 
@@ -143,15 +146,14 @@ def extract_atom_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def extract_bond_features(df: pd.DataFrame) -> pd.DataFrame:
     selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *bond_features]]
-    object_cols = selected_df.select_dtypes(include="object").columns.to_list()
-    exploded_df = selected_df.explode(object_cols)
+    exploded_df = selected_df.explode(bond_features)
 
     # exploded_df["smiles_equal"] = exploded_df["original_smiles"] == exploded_df["output_smiles"]
 
     G = selected_df["gibbs_free_energy_300K"].unique()
     weights = boltzmann_weights(G)
 
-    arr = np.array(exploded_df[object_cols].values.tolist())  # (n_conformers * n_bonds, n_features, 3)
+    arr = np.array(exploded_df[bond_features].values.tolist())  # (n_conformers * n_bonds, n_features, 3)
 
     begin_atom_map_idx = arr[:, 0, 0].astype(int)
     end_atom_map_idx = arr[:, 0, 1].astype(int)
@@ -163,12 +165,12 @@ def extract_bond_features(df: pd.DataFrame) -> pd.DataFrame:
 
     n_conformers = len(weights)
     n_bonds = len(unique_bond_idxs)
-    n_features = len(object_cols)
+    n_features = len(bond_features)
 
     bond_matrix = values.reshape(n_conformers, n_bonds, n_features)
     averages = np.einsum("i,ijk->jk", weights, bond_matrix)
 
-    result = pd.DataFrame(averages, columns=object_cols)
+    result = pd.DataFrame(averages, columns=bond_features)
     result.insert(0, "bond_idx", unique_bond_idxs)
     result.insert(0, "original_smiles", selected_df["original_smiles"].iloc[0])
 
@@ -176,9 +178,19 @@ def extract_bond_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def extract_mol_features(df: pd.DataFrame) -> pd.DataFrame:
-    # TODO: implement molecular feature extraction
-    # should return df with columns: original_smiles, *mol_features
-    raise NotImplementedError
+    selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *mol_features]]
+
+    G = selected_df["gibbs_free_energy_300K"].unique()
+    weights = boltzmann_weights(G)
+
+    arr = selected_df[mol_features].to_numpy()  # (n_conformers, n_features)
+
+    averages = np.einsum("i,ij->j", weights, arr)
+
+    result = pd.DataFrame(averages, columns=mol_features)
+    result.insert(0, "original_smiles", selected_df["original_smiles"].iloc[0])
+
+    return result
 
 
 # ── file processing ───────────────────────────────────────────────────────────
