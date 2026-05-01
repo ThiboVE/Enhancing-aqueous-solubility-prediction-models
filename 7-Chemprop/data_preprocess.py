@@ -96,8 +96,25 @@ def reorder_atom_features(molecule_df: pd.DataFrame) -> pd.DataFrame:
     return molecule_df.iloc[mapnum_order]
 
 
+def get_bond_idx(smiles: str, begin_atom_idxs: np.ndarray, end_atom_idxs: np.ndarray) -> np.ndarray:
+    """The atoms are denoted with their map indices, which are not used in chemprop. Chemprop uses the bond index and iterates over the bond indices from 0 onward.
+
+    => Provide a mapping between atom map index pairs and the bond index, e.g. (1, 2): 1
+    """
+    mol = Chem.MolFromSmiles(smiles, sanitize=False)
+
+    mapping = {
+        (bond.GetBeginAtom().GetAtomMapNum(), bond.GetEndAtom().GetAtomMapNum()): bond.GetIdx()
+        for bond in mol.GetBonds()
+    }
+
+    return np.array(
+        [mapping[(begin_idx, end_idx)] for begin_idx, end_idx in zip(begin_atom_idxs, end_atom_idxs, strict=True)]
+    )
+
+
 def extract_atom_features(df: pd.DataFrame) -> pd.DataFrame:
-    selected_df = df[["original_smiles", "gibbs_free_energy_300K", *atomic_features]]
+    selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *atomic_features]]
     object_cols = selected_df.select_dtypes(include="object").columns.to_list()
     exploded_df = selected_df.explode(object_cols)
 
@@ -108,30 +125,54 @@ def extract_atom_features(df: pd.DataFrame) -> pd.DataFrame:
     atom_map_idx = arr[:, 0, 0].astype(int)
     values = arr[:, :, 1].astype(float)
 
+    unique_atom_idxs = pd.unique(atom_map_idx)
+
     n_conformers = len(weights)
-    n_atoms = len(np.unique(atom_map_idx))
+    n_atoms = len(unique_atom_idxs)
     n_features = len(object_cols)
 
     atom_matrix = values.reshape(n_conformers, n_atoms, n_features)
     averages = np.einsum("i,ijk->jk", weights, atom_matrix)
 
     result = pd.DataFrame(averages, columns=object_cols)
-    result.insert(0, "atom", np.unique(atom_map_idx))
+    result.insert(0, "atom_map_idx", unique_atom_idxs)
     result.insert(0, "original_smiles", selected_df["original_smiles"].iloc[0])
 
     return reorder_atom_features(result)
 
 
 def extract_bond_features(df: pd.DataFrame) -> pd.DataFrame:
-    # TODO: implement bond feature extraction
-    selected_df = df[["original_smiles", "gibbs_free_energy_300K", *bond_features]]
+    selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *bond_features]]
     object_cols = selected_df.select_dtypes(include="object").columns.to_list()
     exploded_df = selected_df.explode(object_cols)
 
-    # TODO: Should filter the rows that are valid bonds, because now the bond features also have non bonding atom pairs
+    # exploded_df["smiles_equal"] = exploded_df["original_smiles"] == exploded_df["output_smiles"]
 
-    # should return df with columns: original_smiles, bond, *bond_features
-    raise NotImplementedError
+    G = selected_df["gibbs_free_energy_300K"].unique()
+    weights = boltzmann_weights(G)
+
+    arr = np.array(exploded_df[object_cols].values.tolist())  # (n_conformers * n_bonds, n_features, 3)
+
+    begin_atom_map_idx = arr[:, 0, 0].astype(int)
+    end_atom_map_idx = arr[:, 0, 1].astype(int)
+    values = arr[:, :, -1].astype(float)
+
+    bond_idx = get_bond_idx(exploded_df["original_smiles"].values[0], begin_atom_map_idx, end_atom_map_idx)
+
+    unique_bond_idxs = pd.unique(bond_idx)
+
+    n_conformers = len(weights)
+    n_bonds = len(unique_bond_idxs)
+    n_features = len(object_cols)
+
+    bond_matrix = values.reshape(n_conformers, n_bonds, n_features)
+    averages = np.einsum("i,ijk->jk", weights, bond_matrix)
+
+    result = pd.DataFrame(averages, columns=object_cols)
+    result.insert(0, "bond_idx", unique_bond_idxs)
+    result.insert(0, "original_smiles", selected_df["original_smiles"].iloc[0])
+
+    return result.sort_values("bond_idx")
 
 
 def extract_mol_features(df: pd.DataFrame) -> pd.DataFrame:
