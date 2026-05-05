@@ -32,6 +32,9 @@ def parallelize(
     Returns:
         list[Any]: A list of results from the function applied on the iterable
     """
+    if n_jobs == 1:
+        return [func(item, **kwargs) for item in tqdm(iterable)]
+
     return Parallel(n_jobs=n_jobs, backend=backend)(delayed(func)(item, **kwargs) for item in tqdm(iterable))
 
 

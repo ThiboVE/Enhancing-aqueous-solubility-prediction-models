@@ -5,7 +5,7 @@ from sklearn.model_selection import RepeatedKFold
 
 
 def main() -> None:
-    df = pd.read_csv("../data/processed_dataset_wo_metals_w_even_more_qm2.csv")
+    df = pd.read_csv("data/processed_dataset_rerun.csv")
 
     X = df.drop(["solubility", "smiles", "canon_smiles", "id"], axis=1)
     y = df["solubility"]

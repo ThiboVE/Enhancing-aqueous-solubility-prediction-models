@@ -1,6 +1,8 @@
+import pickle
 import re
 from collections.abc import Generator, Iterable
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -22,11 +24,11 @@ from ml_enhance import QuantumFPFileLoader, parallelize
 
 @dataclass
 class Config:
-    use_atom_features: bool = True
-    use_bond_features: bool = False
-    use_mol_features: bool = False
-    use_custom_atom_featurizer: bool = True
-    use_custom_bond_featurizer: bool = False
+    use_atom_features: bool
+    use_bond_features: bool
+    use_mol_features: bool
+    use_custom_atom_featurizer: bool
+    use_custom_bond_featurizer: bool
     n_rbf_centers: int = 10
     target_col: str = "solubility"
 
@@ -63,7 +65,7 @@ def filter_files(files: Iterable[Path], used_ids: list[int]) -> list[Path]:
 
     for file in files:
         matches = re.findall(r"\d+", file.name)
-        file_id = int(matches[1])
+        file_id = int(matches[0])
 
         if file_id in used_ids:
             used_files.append(file)
@@ -144,16 +146,18 @@ def get_bond_idx(smiles: str, begin_atom_idxs: np.ndarray, end_atom_idxs: np.nda
     )
 
 
-def extract_atom_features(df: pd.DataFrame) -> pd.DataFrame:
-    selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *atomic_features]]
-    exploded_df = selected_df.explode(atomic_features)
+def extract_atom_features(df: pd.DataFrame, weights: np.ndarray) -> pd.DataFrame:
+    # selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *atomic_features]]
+    # exploded_df = selected_df.explode(atomic_features)
 
-    G = selected_df["gibbs_free_energy_300K"].unique()
-    weights = boltzmann_weights(G)
+    # arr = np.array(exploded_df[atomic_features].values.tolist())  # (n_conformers * n_atoms, n_features, 2)
+    # atom_map_idx = arr[:, 0, 0].astype(int)
+    # values = arr[:, :, 1].astype(float)
 
-    arr = np.array(exploded_df[atomic_features].values.tolist())  # (n_conformers * n_atoms, n_features, 2)
-    atom_map_idx = arr[:, 0, 0].astype(int)
-    values = arr[:, :, 1].astype(float)
+    arr = np.array(df[atomic_features].values.tolist())  # shape: (n_conformers, n_features, n_atoms, 2)
+    arr = arr.transpose(0, 2, 1, 3)  # shape: (n_conformers, n_atoms, n_features, 2)
+    atom_map_idx = arr[0, :, 0, 0].astype(int)
+    values = arr[:, :, :, 1].astype(float)
 
     unique_atom_idxs = pd.unique(atom_map_idx)
 
@@ -166,28 +170,27 @@ def extract_atom_features(df: pd.DataFrame) -> pd.DataFrame:
 
     result = pd.DataFrame(averages, columns=atomic_features)
     result.insert(0, "atom_map_idx", unique_atom_idxs)
-    result.insert(0, "original_smiles", selected_df["original_smiles"].iloc[0])
+    result.insert(0, "original_smiles", df["original_smiles"].iloc[0])
 
     return reorder_atom_features(result)
 
 
-def extract_bond_features(df: pd.DataFrame) -> pd.DataFrame:
-    selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *bond_features]]
-    selected_df = filter_bond_features(selected_df)
-    exploded_df = selected_df.explode(bond_features)
+def extract_bond_features(df: pd.DataFrame, weights: np.ndarray) -> pd.DataFrame:
+    # selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *bond_features]]
+    df = filter_bond_features(df)
+    # exploded_df = selected_df.explode(bond_features)
 
     # exploded_df["smiles_equal"] = exploded_df["original_smiles"] == exploded_df["output_smiles"]
 
-    G = selected_df["gibbs_free_energy_300K"].unique()
-    weights = boltzmann_weights(G)
+    # arr = np.array(exploded_df[bond_features].values.tolist())  # (n_conformers * n_bonds, n_features, 3)
 
-    arr = np.array(exploded_df[bond_features].values.tolist())  # (n_conformers * n_bonds, n_features, 3)
+    arr = np.array(df[bond_features].values.tolist())  # shape: (n_conformers, n_features, n_bonds, 2)
+    arr = arr.transpose(0, 2, 1, 3)  # shape: (n_conformers, n_bonds, n_features, 2)
+    begin_atom_map_idx = arr[0, :, 0, 0].astype(int)
+    end_atom_map_idx = arr[0, :, 0, 1].astype(int)
+    values = arr[:, :, :, -1].astype(float)
 
-    begin_atom_map_idx = arr[:, 0, 0].astype(int)
-    end_atom_map_idx = arr[:, 0, 1].astype(int)
-    values = arr[:, :, -1].astype(float)
-
-    bond_idx = get_bond_idx(exploded_df["original_smiles"].values[0], begin_atom_map_idx, end_atom_map_idx)
+    bond_idx = get_bond_idx(df["original_smiles"].values[0], begin_atom_map_idx, end_atom_map_idx)
 
     unique_bond_idxs = pd.unique(bond_idx)
 
@@ -200,23 +203,20 @@ def extract_bond_features(df: pd.DataFrame) -> pd.DataFrame:
 
     result = pd.DataFrame(averages, columns=bond_features)
     result.insert(0, "bond_idx", unique_bond_idxs)
-    result.insert(0, "original_smiles", selected_df["original_smiles"].iloc[0])
+    result.insert(0, "original_smiles", df["original_smiles"].iloc[0])
 
     return result.sort_values("bond_idx")
 
 
-def extract_mol_features(df: pd.DataFrame) -> pd.DataFrame:
-    selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *mol_features]]
+def extract_mol_features(df: pd.DataFrame, weights: np.ndarray) -> pd.DataFrame:
+    # selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *mol_features]]
 
-    G = selected_df["gibbs_free_energy_300K"].unique()
-    weights = boltzmann_weights(G)
-
-    arr = selected_df[mol_features].to_numpy()  # (n_conformers, n_features)
+    arr = df[mol_features].to_numpy()  # (n_conformers, n_features)
 
     averages = np.einsum("i,ij->j", weights, arr)
 
     result = pd.DataFrame(averages, columns=mol_features)
-    result.insert(0, "original_smiles", selected_df["original_smiles"].iloc[0])
+    result.insert(0, "original_smiles", df["original_smiles"].iloc[0])
 
     return result
 
@@ -224,33 +224,77 @@ def extract_mol_features(df: pd.DataFrame) -> pd.DataFrame:
 # ── file processing ───────────────────────────────────────────────────────────
 
 
-def process_files(
-    files: Iterable[Path],
+def _process_single_file(
+    file: Path,
     loader: QuantumFPFileLoader,
     *,
     use_atom_features: bool = True,
     use_bond_features: bool = False,
     use_mol_features: bool = False,
+) -> tuple[list[pd.DataFrame], list[pd.DataFrame], list[pd.DataFrame]]:
+    atoms: list[pd.DataFrame] = []
+    bonds: list[pd.DataFrame] = []
+    mols: list[pd.DataFrame] = []
+
+    for df in stream_conformer_df(file, loader):
+        G = df["gibbs_free_energy_300K"].unique()
+        weights = boltzmann_weights(G)
+
+        if use_atom_features:
+            atoms.append(extract_atom_features(df, weights))
+        if use_bond_features:
+            bonds.append(extract_bond_features(df, weights))
+        if use_mol_features:
+            mols.append(extract_mol_features(df, weights))
+
+    return atoms, bonds, mols
+
+
+def process_files(
+    files: Iterable[Path],
+    loader: QuantumFPFileLoader,
+    *,
+    use_atom_features: bool = False,
+    use_bond_features: bool = False,
+    use_mol_features: bool = False,
+    n_jobs: int = 5,
 ) -> dict[str, pd.DataFrame | None]:
+    if (not use_atom_features) and (not use_bond_features) and (not use_mol_features):
+        return {
+            "atoms": None,
+            "bonds": None,
+            "mols": None,
+        }
+
     all_atoms: list[pd.DataFrame] = []
     all_bonds: list[pd.DataFrame] = []
     all_mols: list[pd.DataFrame] = []
 
-    if use_atom_features or use_bond_features or use_mol_features:
-        for file in files:
-            for sdf in stream_conformer_df(file, loader):
-                if use_atom_features:
-                    all_atoms.append(extract_atom_features(sdf))
-                if use_bond_features:
-                    all_bonds.append(extract_bond_features(sdf))
-                if use_mol_features:
-                    all_mols.append(extract_mol_features(sdf))
+    p_process_single_file = partial(
+        _process_single_file,
+        loader=loader,
+        use_atom_features=use_atom_features,
+        use_bond_features=use_bond_features,
+        use_mol_features=use_mol_features,
+    )
 
-    return {
+    results = parallelize(p_process_single_file, files, n_jobs=n_jobs)
+
+    for atoms, bonds, mols in results:
+        all_atoms.extend(atoms)
+        all_bonds.extend(bonds)
+        all_mols.extend(mols)
+
+    feature_dict = {
         "atoms": pd.concat(all_atoms, ignore_index=True) if all_atoms else None,
         "bonds": pd.concat(all_bonds, ignore_index=True) if all_bonds else None,
         "mols": pd.concat(all_mols, ignore_index=True) if all_mols else None,
     }
+
+    with open("temporary.pkl", "wb") as f:
+        pickle.dump(feature_dict, f)
+
+    return feature_dict
 
 
 # ── scaling ───────────────────────────────────────────────────────────────────
@@ -324,26 +368,35 @@ def make_datapoints(
     bond_rbf_cols: list[str],
     target_col: str = "solubility",
 ) -> list[MoleculeDatapoint]:
+    atom_lookup = (
+        None
+        if atom_df is None
+        else atom_df.groupby("original_smiles")[atom_rbf_cols].apply(lambda x: x.to_numpy(dtype=float).copy()).to_dict()
+    )
+
+    bond_lookup = (
+        None
+        if bond_df is None
+        else bond_df.groupby("original_smiles")[bond_rbf_cols].apply(lambda x: x.to_numpy(dtype=float).copy()).to_dict()
+    )
+
+    mol_lookup = (
+        None
+        if mol_df is None
+        else mol_df.groupby("original_smiles")[mol_features]
+        .apply(lambda x: np.atleast_1d(x.to_numpy(dtype=float).squeeze()))
+        .to_dict()
+    )
+
     datapoints = []
 
-    for smiles in target_df["smiles"]:
-        y = target_df.loc[target_df["smiles"] == smiles, target_col].to_numpy()
+    for row in target_df.itertuples(index=False):
+        smiles = row.smiles
+        y = np.array([getattr(row, target_col)], dtype=float)
 
-        V_f = (
-            atom_df[atom_df["original_smiles"] == smiles][atom_rbf_cols].to_numpy(dtype=float)
-            if atom_df is not None
-            else None
-        )
-        E_f = (
-            bond_df[bond_df["original_smiles"] == smiles][bond_rbf_cols].to_numpy(dtype=float)
-            if bond_df is not None
-            else None
-        )
-        x_d = (
-            np.atleast_1d(mol_df[mol_df["original_smiles"] == smiles][mol_features].to_numpy(dtype=float).squeeze())
-            if mol_df is not None
-            else None
-        )
+        V_f = atom_lookup.get(smiles) if atom_lookup is not None else None
+        E_f = bond_lookup.get(smiles) if bond_lookup is not None else None
+        x_d = mol_lookup.get(smiles) if mol_lookup is not None else None
 
         datapoints.append(MoleculeDatapoint.from_smi(smi=smiles, y=y, V_f=V_f, E_f=E_f, x_d=x_d, keep_h=True))
 
@@ -361,7 +414,7 @@ def get_featurizer(
     extra_bond_fdim: int = 0,
 ) -> SimpleMoleculeMolGraphFeaturizer:
     if use_custom_atom_featurizer:
-        # These represent all atoms present in the processed dataset "processed_dataset_wo_metals_w_even_more_qm2.csv"
+        # These represent all atoms present in the processed AqSol dataset
         atomic_nums = [1, 5, 6, 7, 8, 9, 13, 14, 15, 16, 17, 35, 53]
         degrees = [0, 1, 2, 3, 4, 5]
         formal_charges = []
@@ -400,7 +453,7 @@ def get_smiles_from_files(
     files: Iterable[Path],
     target_df: pd.DataFrame,
 ) -> list[str]:
-    ids = [int(re.findall(r"\d+", file.name)[1]) for file in files]
+    ids = [int(re.findall(r"\d+", file.name)[0]) for file in files]
     return target_df[target_df["id"].isin(ids)]["smiles"].tolist()
 
 
@@ -579,13 +632,12 @@ def run_outer_loop(
     inner_cv: KFold,
     config: Config,
     output_dir: Path,
+    n_jobs: int = 5,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    parallelize(
+    p_build_and_save_fold = partial(
         build_and_save_fold,
-        enumerate(outer_splits),
-        n_jobs=5,
         used_files=used_files,
         target_df=target_df,
         all_features=all_features,
@@ -594,22 +646,36 @@ def run_outer_loop(
         output_dir=output_dir,
     )
 
+    parallelize(
+        p_build_and_save_fold,
+        enumerate(outer_splits),
+        n_jobs=n_jobs,
+    )
+
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
 
 def main() -> None:
-    target_df = pd.read_csv("../data/processed_dataset_wo_metals_w_even_more_qm2.csv")
+    target_df = pd.read_csv("../data/processed_dataset_rerun.csv")
     used_ids: list[int] = target_df["id"].apply(round).to_list()
 
-    qfp_loader = QuantumFPFileLoader(Path("../data/QuantumFP/QFP_output"))
+    qfp_loader = QuantumFPFileLoader(Path("../data/QFP_rerun/output"))
     filelist: list[Path] = qfp_loader.list_output_files()
     used_files = np.array(filter_files(filelist, used_ids))
 
-    outer_splits = pd.read_pickle("../hpc_splits.pkl")
+    outer_splits = pd.read_pickle("../splits.pkl")
     inner_cv = KFold(n_splits=5, shuffle=True, random_state=42)
 
-    config = Config()
+    config = Config(
+        use_atom_features=False,
+        use_bond_features=False,
+        use_mol_features=False,
+        use_custom_atom_featurizer=True,
+        use_custom_bond_featurizer=False,
+    )
+
+    print("Begin processing all files")
 
     all_features = process_files(
         used_files,
@@ -617,7 +683,13 @@ def main() -> None:
         use_atom_features=config.use_atom_features,
         use_bond_features=config.use_bond_features,
         use_mol_features=config.use_mol_features,
+        n_jobs=5,
     )
+
+    # with open("temporary.pkl", "rb") as f:
+    #     all_features = pickle.load(f)
+
+    print("Processed all files")
 
     run_outer_loop(
         outer_splits,
@@ -627,6 +699,7 @@ def main() -> None:
         inner_cv,
         config,
         output_dir=Path("../data/folds_no_added"),
+        n_jobs=5,
     )
 
 

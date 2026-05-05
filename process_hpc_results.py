@@ -31,6 +31,7 @@ import ml_enhance
 from ml_enhance import CorrelationFilter, parse_filename  # noqa: F401
 
 sys.modules["utils"] = ml_enhance
+sys.modules["correlation_filter"] = ml_enhance
 
 
 def read_file(file: Path) -> dict[str, Any]:
@@ -154,3 +155,7 @@ def main() -> None:
     process_shap_files(shap_files, SHAP_output_file)
 
     input_path.rename(storage_folder / input_path)
+
+
+if __name__ == "__main__":
+    main()
