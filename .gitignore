@@ -16,3 +16,6 @@ data/KRR_results/*
 data/QM9/data.csv
 *.pt
 tjorven
+atom_features.csv
+bond_features.csv
+mol_features.csv

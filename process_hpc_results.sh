@@ -16,7 +16,7 @@
 
 
 # python process_hpc_results.py 1_RF_combo_rerun
-python process_hpc_results.py 1_RF_combo_relevant_rerun
+# python process_hpc_results.py 1_RF_combo_relevant_rerun
 # python process_hpc_results.py 1_RF_combo_relevant_no_norm_rerun
 # python process_hpc_results.py 1_RF_topo_rerun
 python process_hpc_results.py 1_RF_topo_relevant_rerun

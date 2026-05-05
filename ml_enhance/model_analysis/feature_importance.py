@@ -95,13 +95,7 @@ class FeatureImportance:
         self.fi_df = df.sort_values(by="score", ascending=False).reset_index(drop=True)
         return self.fi_df
 
-    def plot(
-        self,
-        ax,
-        num_features: int = 20,
-        *,
-        color: str = "tab:blue",
-    ) -> None:
+    def plot(self, ax, num_features: int = 20, *, color: str = "tab:blue", title: str | None = None) -> None:
         """Plot the feature importance on a given axis.
 
         params:
@@ -149,7 +143,8 @@ class FeatureImportance:
         ax.spines["right"].set_visible(False)
 
         ax.set_xlabel("Feature importance", fontsize=16)
-        # ax.set_title(f"Top {num_features} most important features", fontsize=16)
+        if title is not None:
+            ax.set_title(title, fontsize=16)
         # ax.legend(handles=legend_elements, frameon=False, loc="lower right", fontsize=12)
 
     def _unwrap_estimator(self, estimator: BaseEstimator) -> tuple[BaseEstimator, np.ndarray | None, np.ndarray | None]:
