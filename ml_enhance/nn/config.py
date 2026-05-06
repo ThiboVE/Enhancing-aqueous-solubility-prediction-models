@@ -27,10 +27,9 @@ atom_features: list[str] = [
 bond_features: list[str] = [
     "bond_length",
     "bond_stiffness",
-    "bond_energy",
     "nuclear_repulsion",
-    "atomic_charge_dipole_interaction",
-    "atomic_charge_quadrupole_interaction",
+    # "atomic_charge_dipole_interaction",
+    # "atomic_charge_quadrupole_interaction",
     "atomic_dipole_dipole_interaction",
 ]
 

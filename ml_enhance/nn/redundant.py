@@ -9,7 +9,7 @@ from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
 
 from ml_enhance import parallelize
-from ml_enhance.chemprop import Config, build_datasets
+from ml_enhance.nn import Config, build_datasets
 
 # ── CV loop ───────────────────────────────────────────────────────────────────
 

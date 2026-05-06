@@ -13,6 +13,7 @@ HuberReg_RFE_*
 data/HuberReg_results/*
 data/RF_results/*
 data/KRR_results/*
+data/chemprop_results/*
 data/QM9/data.csv
 *.pt
 tjorven

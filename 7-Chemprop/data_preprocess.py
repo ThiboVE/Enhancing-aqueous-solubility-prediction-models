@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from ml_enhance import QuantumFPFileLoader
-from ml_enhance.chemprop import Config, process_files
+from ml_enhance.nn import Config, process_files
 
 
 def filter_files(files: Iterable[Path], used_ids: list[int]) -> list[Path]:
@@ -53,7 +53,7 @@ def main() -> None:
 
     config = Config(
         use_atom_features=False,
-        use_bond_features=False,
+        use_bond_features=True,
         use_mol_features=False,
         use_custom_atom_featurizer=True,
         use_custom_bond_featurizer=False,
@@ -70,13 +70,13 @@ def main() -> None:
         n_jobs=5,
     )
 
-    atom_feature_df = all_features["atom"]
-    bond_feature_df = all_features["bond"]
-    mol_feature_df = all_features["mol"]
+    atom_feature_df = all_features["atoms"]
+    bond_feature_df = all_features["bonds"]
+    mol_feature_df = all_features["mols"]
 
-    save_df(atom_feature_df, "needed_data/atom_features.csv")
+    # save_df(atom_feature_df, "needed_data/atom_features.csv")
     save_df(bond_feature_df, "needed_data/bond_features.csv")
-    save_df(mol_feature_df, "needed_data/mol_features.csv")
+    # save_df(mol_feature_df, "needed_data/mol_features.csv")
 
 
 if __name__ == "__main__":

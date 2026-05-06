@@ -11,7 +11,7 @@ from scipy.constants import (
 )
 
 from ml_enhance import QuantumFPFileLoader, parallelize
-from ml_enhance.chemprop import atom_features, bond_features, mol_features
+from ml_enhance.nn import atom_features, bond_features, mol_features
 
 
 def stream_conformer_df(
@@ -67,10 +67,13 @@ def filter_bond_features(df: pd.DataFrame) -> pd.DataFrame:
     bond_atom_pairs = get_bond_mapping(df.loc[0, "original_smiles"]).keys()
 
     def filter_list(lst: list[int | float]) -> list[int | float]:
-        return [x for x in lst if (x[0], x[1]) in bond_atom_pairs]
+        return [x for x in lst if (x[0], x[1]) in bond_atom_pairs or (x[1], x[0]) in bond_atom_pairs]
 
     for col in bond_features:
-        df[col] = df[col].apply(filter_list)
+        if col in df.columns:
+            df[col] = df[col].apply(filter_list)
+        else:
+            print(f"{col} not present in dataframe.")
 
     return df
 
@@ -88,13 +91,6 @@ def get_bond_idx(smiles: str, begin_atom_idxs: np.ndarray, end_atom_idxs: np.nda
 
 
 def extract_atom_features(df: pd.DataFrame, weights: np.ndarray) -> pd.DataFrame:
-    # selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *atom_features]]
-    # exploded_df = selected_df.explode(atom_features)
-
-    # arr = np.array(exploded_df[atom_features].values.tolist())  # (n_conformers * n_atoms, n_features, 2)
-    # atom_map_idx = arr[:, 0, 0].astype(int)
-    # values = arr[:, :, 1].astype(float)
-
     arr = np.array(df[atom_features].values.tolist())  # shape: (n_conformers, n_features, n_atoms, 2)
     arr = arr.transpose(0, 2, 1, 3)  # shape: (n_conformers, n_atoms, n_features, 2)
     atom_map_idx = arr[0, :, 0, 0].astype(int)
@@ -117,13 +113,7 @@ def extract_atom_features(df: pd.DataFrame, weights: np.ndarray) -> pd.DataFrame
 
 
 def extract_bond_features(df: pd.DataFrame, weights: np.ndarray) -> pd.DataFrame:
-    # selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *bond_features]]
     df = filter_bond_features(df)
-    # exploded_df = selected_df.explode(bond_features)
-
-    # exploded_df["smiles_equal"] = exploded_df["original_smiles"] == exploded_df["output_smiles"]
-
-    # arr = np.array(exploded_df[bond_features].values.tolist())  # (n_conformers * n_bonds, n_features, 3)
 
     arr = np.array(df[bond_features].values.tolist())  # shape: (n_conformers, n_features, n_bonds, 2)
     arr = arr.transpose(0, 2, 1, 3)  # shape: (n_conformers, n_bonds, n_features, 2)
@@ -150,8 +140,6 @@ def extract_bond_features(df: pd.DataFrame, weights: np.ndarray) -> pd.DataFrame
 
 
 def extract_mol_features(df: pd.DataFrame, weights: np.ndarray) -> pd.DataFrame:
-    # selected_df = df[["original_smiles", "output_smiles", "gibbs_free_energy_300K", *mol_features]]
-
     arr = df[mol_features].to_numpy()  # (n_conformers, n_features)
 
     averages = np.einsum("i,ij->j", weights, arr)

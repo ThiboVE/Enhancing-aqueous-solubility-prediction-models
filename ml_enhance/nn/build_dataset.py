@@ -5,19 +5,21 @@ import pandas as pd
 from chemprop.data import MoleculeDatapoint, MoleculeDataset
 from sklearn.preprocessing import StandardScaler
 
-from ml_enhance.chemprop import (
+from ml_enhance.nn.config import (
     Config,
-    apply_rbf,
     atom_features,
     bond_features,
-    build_lookup,
-    get_featurizer,
     mol_features,
+)
+from ml_enhance.nn.features import (
+    apply_rbf,
+    build_lookup,
     scale_features,
     scale_target,
     split_df_by_ids,
     subset_features,
 )
+from ml_enhance.nn.featurizer import get_featurizer
 
 # ── datapoint construction ────────────────────────────────────────────────────
 

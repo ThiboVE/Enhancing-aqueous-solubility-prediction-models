@@ -17,6 +17,7 @@ for objective 2.
 These files are pulled out of the results directory and combined into one two files: one for the model and performance (.pkl file) and one for the permutation feature importance (PFI) results (.csv file).
 """
 
+import json
 import pickle
 import sys
 from collections.abc import Callable
@@ -25,6 +26,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import torch
 from sklearn.base import BaseEstimator
 
 import ml_enhance
@@ -34,13 +36,9 @@ sys.modules["utils"] = ml_enhance
 sys.modules["correlation_filter"] = ml_enhance
 
 
-def read_file(file: Path) -> dict[str, Any]:
-    with file.open("rb") as f:
-        return pickle.load(f)
-
-
 def read_pkl_summary(file: Path) -> dict[str, Any]:
-    file_data = read_file(file)
+    with file.open("rb") as f:
+        file_data = pickle.load(f)
 
     return {
         "estimator": file_data["model"],
@@ -59,6 +57,15 @@ def read_pfi_csv(file: Path) -> dict[str, Any]:
 def read_shap_csv(file: Path) -> dict[str, Any]:
     df = pd.read_csv(file, index_col="feature")
     return {"shap_df": df[["shap_mean_abs", "shap_std_abs", "shap_mean_signed", "shap_std_signed"]]}
+
+
+def read_json(file: Path) -> dict[str, Any]:
+    with file.open("r") as f:
+        return json.load(f)
+
+
+def read_pt(file: Path) -> dict[str, Any]:
+    return torch.load(file, weights_only=False)
 
 
 def group_files(
@@ -95,6 +102,16 @@ def get_rf_coef(estimator: BaseEstimator) -> np.ndarray:
     return estimator.named_steps["predict"].feature_importances_
 
 
+def process_pkl_files(pkl_files: list[Path], output_file: Path) -> None:
+    if len(pkl_files) == 0:
+        return
+
+    pkl_grouped = group_files(pkl_files, read_pkl_summary)
+    pkl_grouped_np = {k: np.array(v) for k, v in pkl_grouped.items()}
+
+    save_pkl(pkl_grouped_np, output_file)
+
+
 def process_pfi_files(csv_files: list[Path], output_file: Path) -> None:
     if len(csv_files) == 0:
         return
@@ -121,6 +138,30 @@ def process_shap_files(csv_files: list[Path], output_file: Path) -> None:
     shap_df.to_csv(output_file, index=False)
 
 
+def process_json_files(json_files: list[Path], output_file: Path) -> None:
+    if len(json_files) == 0:
+        return
+
+    json_grouped = group_files(json_files, read_json)
+    json_df = pd.DataFrame(json_grouped)
+    json_df.to_csv(output_file, index=False)
+
+
+def process_pt_files(pt_files: list[Path], output_file: Path) -> None:
+    if len(pt_files) == 0:
+        return
+
+    pt_dict = {}
+    for file in pt_files:
+        info = parse_filename(file)
+        data = read_pt(file)
+        combined = {**info, **data}
+
+        pt_dict[f"fold_{info['fold_id']}"] = combined
+
+    torch.save(pt_dict, output_file)
+
+
 def main() -> None:
     input_path: Path = Path(str(sys.argv[1]))
 
@@ -133,6 +174,8 @@ def main() -> None:
     output_file = output_dir / f"{dirname}_results.pkl"
     PFI_output_file = output_dir / f"{dirname}_PFI_results.csv"
     SHAP_output_file = output_dir / f"{dirname}_SHAP_results.csv"
+    json_output_file = output_dir / f"{dirname}_results.json"
+    pt_output_file = output_dir / f"{dirname}_results.pt"
 
     storage_folder: Path = Path(r"C:\Users\thibo\Downloads\hpc_results")  # local path, update per machine
 
@@ -144,15 +187,19 @@ def main() -> None:
         (input_path / "results").rmdir()
 
     pkl_files: list[Path] = [file for file in input_path.glob("**/*.pkl") if file.is_file()]
-    pkl_grouped = group_files(pkl_files, read_pkl_summary)
-    pkl_grouped_np = {k: np.array(v) for k, v in pkl_grouped.items()}
-    save_pkl(pkl_grouped_np, output_file)
+    process_pkl_files(pkl_files, output_file)
 
     pfi_files: list[Path] = [file for file in input_path.glob("**/*PFI*.csv") if file.is_file()]
     process_pfi_files(pfi_files, PFI_output_file)
 
     shap_files: list[Path] = [file for file in input_path.glob("**/*SHAP*.csv") if file.is_file()]
     process_shap_files(shap_files, SHAP_output_file)
+
+    json_files: list[Path] = [file for file in input_path.glob("**/*.json") if file.is_file()]
+    process_json_files(json_files, json_output_file)
+
+    pt_files: list[Path] = [file for file in input_path.glob("**/*.pt") if file.is_file()]
+    process_pt_files(pt_files, pt_output_file)
 
     input_path.rename(storage_folder / input_path)
 
