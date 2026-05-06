@@ -14,20 +14,28 @@ from tqdm import tqdm
 
 
 def parallelize(
-    func: Callable[[Any], Any], iterable: Iterable[Any], n_jobs: int = 4, backend: str = "loky"
+    func: Callable[..., Any],
+    iterable: Iterable[Any],
+    n_jobs: int = 4,
+    backend: str = "loky",
+    **kwargs: Any,
 ) -> list[Any]:
     """Parallelize a function for a given array.
 
     Args:
-        func (Callable[[Any], Any]): The function that needs to be applied in parallel.
-        iterable (Iterable[Any]): The array to which the function needs to be applied in parallel.
-        n_jobs (int): The number of jobs (cpus) that are used to perform the task in parallel.
-        backend (str): The backend that is used by joblib to perform the paralellization.
+        func: The function that needs to be applied in parallel.
+        iterable: The array to which the function needs to be applied in parallel.
+        n_jobs: The number of jobs (cpus) that are used to perform the task in parallel.
+        backend: The backend that is used by joblib to perform the paralellization.
+        **kwargs: Additional fixed arguments passed to func.
 
     Returns:
         list[Any]: A list of results from the function applied on the iterable
     """
-    return Parallel(n_jobs=n_jobs, backend=backend)(delayed(func)(item) for item in tqdm(iterable))
+    if n_jobs == 1:
+        return [func(item, **kwargs) for item in tqdm(iterable)]
+
+    return Parallel(n_jobs=n_jobs, backend=backend)(delayed(func)(item, **kwargs) for item in tqdm(iterable))
 
 
 def canonicalize_smiles(smiles: str) -> str | None:

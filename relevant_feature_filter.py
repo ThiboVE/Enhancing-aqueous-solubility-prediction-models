@@ -85,6 +85,10 @@ def filter_df(df: pd.DataFrame) -> pd.DataFrame:
         "num_heavy_H_bonds",
         "rigid_flag",
         "molecular_volume",
+        "avg_nuclear_repulsion",
+        "min_nuclear_repulsion",
+        "max_nuclear_repulsion",
+        "std_nuclear_repulsion",
     ]
 
     irrelevant_topo_features = [
@@ -138,6 +142,7 @@ def normalize(df: pd.DataFrame) -> pd.DataFrame:
         "Kappa2",
         "Kappa3",
         "TPSA",
+        "Phi",
         "NumHAcceptors",
         "RingCount",
         "HallKierAlpha",
@@ -145,7 +150,7 @@ def normalize(df: pd.DataFrame) -> pd.DataFrame:
         "NumRotatableBonds",
     ]
 
-    new_cols = {f"{feature}_per_atom": df[feature] / df["n_atoms"] for feature in to_normalize}
+    new_cols = {f"relative_{feature}": df[feature] / df["n_atoms"] for feature in to_normalize}
 
     df = pd.concat([df, pd.DataFrame(new_cols)], axis=1)
 
@@ -153,14 +158,15 @@ def normalize(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
-    df = pd.read_csv(r"data\processed_dataset_wo_metals_w_even_more_qm2.csv")
+    df = pd.read_csv(r"data\processed_dataset_rerun.csv")
     df = df.copy()
 
     df = filter_df(df)
     df["n_atoms"] = df["smiles"].map(get_num_atoms)
-    # df = normalize(df)
+    df = normalize(df)
 
-    df.to_csv(r"./data/processed_dataset_wo_metals_w_even_more_qm2_relevant_no_norm.csv", index=False)
+    df.to_csv(r"./data/processed_dataset_rerun_relevant.csv", index=False)
+    # df.to_csv(r"./data/processed_dataset_rerun_relevant_no_norm.csv", index=False)
 
 
 if __name__ == "__main__":

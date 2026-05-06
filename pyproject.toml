@@ -18,6 +18,12 @@ dependencies = [
     "seaborn>=0.13.2",
     "pingouin>=0.6.1",
     "torch>=2.11.0",
+    "chemprop>=2.2.3",
+    "optuna>=4.8.0",
+    "optuna-integration>=4.8.0",
+    "ipywidgets>=8.1.8",
+    "shap>=0.51.0",
+    "brokenaxes>=0.6.2",
 ]
 
 [project.optional-dependencies]
