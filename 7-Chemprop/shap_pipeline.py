@@ -1,4 +1,4 @@
-from collections.abc import Iterable
+from collections.abc import Callable
 from functools import partial
 from typing import Any
 
@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import shap
 import torch
-from chemprop import data, models
-from chemprop.data import MoleculeDatapoint, MoleculeDataset
+from chemprop import models
+from chemprop.data import MoleculeDatapoint, MoleculeDataset, build_dataloader
 from lightning import pytorch as pl
 
 from ml_enhance.nn import (
@@ -86,7 +86,7 @@ def get_predictions(
     )
 
     dataset = MoleculeDataset([masked_datapoint], featurizer=featurizer)
-    loader = data.build_dataloader(dataset, shuffle=False, batch_size=1)
+    loader = build_dataloader(dataset, shuffle=False, batch_size=1)
 
     preds = trainer.predict(mpnn, loader)
     # preds is a list of tensors, one per batch
@@ -158,7 +158,6 @@ def run_shap_analysis(
     mol_feature_names: list[str],
     n_rbf: int = 10,
     max_evals: int = 100,
-    n_jobs: int = 5,
 ) -> dict[str, Any]:
     """Run SHAP analysis over an entire test dataset.
 
@@ -242,26 +241,13 @@ def run_shap_analysis(
 # ── example usage ─────────────────────────────────────────────────────────────
 
 
-def main() -> None:
-    cfg = Config(
-        use_atom_features=True,
-        use_bond_features=False,
-        use_mol_features=False,
-        use_custom_atom_featurizer=True,
-        use_custom_bond_featurizer=False,
-    )
-
-    target_df = pd.read_csv("../target_df.csv")
-
-    all_features: dict[str, pd.DataFrame | None] = get_all_features()
-
-    data = torch.load("../chemprop_splits.pt", weights_only=False)
+def run_fold(fold_id: int, data: dict[str, Any], p_build_datasets: Callable):
     split_data = data[f"outer_fold_{fold_id}"]
 
-    outer_train_ids: Iterable[int] = split_data["train_ids"]
-    outer_test_ids: Iterable[int] = split_data["test_ids"]
+    outer_train_ids = split_data["train_ids"]
+    outer_test_ids = split_data["test_ids"]
 
-    _, outer_test_dset, _ = build_datasets(outer_train_ids, outer_test_ids, target_df, all_features, config=cfg)
+    _, outer_test_dset, _ = p_build_datasets(outer_train_ids, outer_test_ids)
 
     # load your trained model checkpoint
     mpnn = models.MPNN.load_from_file("")
@@ -277,6 +263,26 @@ def main() -> None:
     print("Mean absolute SHAP values per feature group:")
     for name, val in zip(results["feature_names"], results["mean_shap"], strict=True):
         print(f"  {name}: {val:.4f}")
+
+
+def main() -> None:
+    cfg = Config(
+        use_atom_features=True,
+        use_bond_features=False,
+        use_mol_features=False,
+        use_custom_atom_featurizer=True,
+        use_custom_bond_featurizer=False,
+    )
+
+    target_df = pd.read_csv("../target_df.csv")
+
+    all_features: dict[str, pd.DataFrame | None] = get_all_features()
+
+    data = torch.load("../chemprop_splits.pt", weights_only=False)
+
+    p_build_datasets = partial(build_datasets, target_df=target_df, all_features=all_features, config=cfg)
+
+    run_fold(fold_id, data, p_build_datasets)
 
     # save results
     # np.save("shap_values.npy", results["shap_values"])
