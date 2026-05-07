@@ -133,7 +133,7 @@ class FeatureImportance:
         ]
 
         for tick in ax.get_yticklabels():
-            tick.set_size(12)
+            tick.set_size(14)
             if tick.get_text() not in topology_features:
                 tick.set_fontweight("bold")
                 tick.set_color(color)
@@ -142,9 +142,9 @@ class FeatureImportance:
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
 
-        ax.set_xlabel("Feature importance", fontsize=16)
+        ax.set_xlabel("Feature importance", fontsize=18)
         if title is not None:
-            ax.set_title(title, fontsize=16)
+            ax.set_title(title, fontsize=20)
         # ax.legend(handles=legend_elements, frameon=False, loc="lower right", fontsize=12)
 
     def _unwrap_estimator(self, estimator: BaseEstimator) -> tuple[BaseEstimator, np.ndarray | None, np.ndarray | None]:

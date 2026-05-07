@@ -1,4 +1,4 @@
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 import numpy as np
 import pandas as pd
@@ -23,6 +23,24 @@ from ml_enhance.nn.featurizer import get_featurizer
 
 # ── datapoint construction ────────────────────────────────────────────────────
 
+type FeatureTransform = Callable[
+    [np.ndarray | None, np.ndarray | None, np.ndarray | None],
+    tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None],
+]
+
+
+def _lookup_features(
+    smiles: str,
+    atom_lookup: dict[str, np.ndarray] | None,
+    bond_lookup: dict[str, np.ndarray] | None,
+    mol_lookup: dict[str, np.ndarray] | None,
+) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None]:
+    return (
+        atom_lookup.get(smiles) if atom_lookup else None,
+        bond_lookup.get(smiles) if bond_lookup else None,
+        mol_lookup.get(smiles) if mol_lookup else None,
+    )
+
 
 def make_datapoints(
     target_df: pd.DataFrame,
@@ -30,18 +48,39 @@ def make_datapoints(
     bond_lookup: dict[str, np.ndarray] | None,
     mol_lookup: dict[str, np.ndarray] | None,
     target_col: str = "solubility",
+    *,
+    transform_features: FeatureTransform | None = None,
 ) -> list[MoleculeDatapoint]:
     datapoints = []
 
     for row in target_df.itertuples(index=False):
-        smiles = row.smiles
+        smiles = str(row.smiles)
+
         y = np.array([getattr(row, target_col)], dtype=float)
 
-        V_f = atom_lookup.get(smiles) if atom_lookup is not None else None
-        E_f = bond_lookup.get(smiles) if bond_lookup is not None else None
-        x_d = mol_lookup.get(smiles) if mol_lookup is not None else None
+        V_f, E_f, x_d = _lookup_features(
+            smiles,
+            atom_lookup,
+            bond_lookup,
+            mol_lookup,
+        )
 
-        datapoints.append(MoleculeDatapoint.from_smi(smi=smiles, y=y, V_f=V_f, E_f=E_f, x_d=x_d, keep_h=True))
+        V_f_transformed, E_f_transformed, x_d_transformed = (
+            V_f,
+            E_f,
+            x_d if transform_features is None else transform_features(V_f, E_f, x_d),
+        )
+
+        datapoints.append(
+            MoleculeDatapoint.from_smi(
+                smi=smiles,
+                y=y,
+                V_f=V_f_transformed,
+                E_f=E_f_transformed,
+                x_d=x_d_transformed,
+                keep_h=True,
+            )
+        )
 
     return datapoints
 
