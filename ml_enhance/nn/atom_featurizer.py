@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from typing import Self
 
 import numpy as np
 from chemprop.featurizers.atom import MultiHotAtomFeaturizer
@@ -61,3 +62,25 @@ class CustomMultiHotAtomFeaturizer(MultiHotAtomFeaturizer):
     def zero_mask(self) -> np.ndarray:
         """Featurize the atom by setting all bits to zero."""
         return np.zeros(len(self))
+
+    @classmethod
+    def from_custom(
+        cls,
+        keep_features: list[bool] | None = None,
+    ) -> Self:
+        atomic_nums = [1, 5, 6, 7, 8, 9, 13, 14, 15, 16, 17, 35, 53]
+        degrees = [0, 1, 2, 3, 4, 5]
+        formal_charges = []
+        chiral_tags = [0, 1, 2, 3]
+        num_Hs = [0, 1, 2, 3, 4]
+        hybridizations = [
+            HybridizationType.S,
+            HybridizationType.SP,
+            HybridizationType.SP2,
+            HybridizationType.SP2D,
+            HybridizationType.SP3,
+            HybridizationType.SP3D,
+            HybridizationType.SP3D2,
+        ]
+
+        return cls(atomic_nums, degrees, formal_charges, chiral_tags, num_Hs, hybridizations, keep_features)

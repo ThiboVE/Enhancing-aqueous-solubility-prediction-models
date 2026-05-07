@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from typing import Self
 
 import numpy as np
 from chemprop.featurizers.bond import MultiHotBondFeaturizer
@@ -70,3 +71,12 @@ class CustomMultiHotBondFeaturizer(MultiHotBondFeaturizer):
         """
         n = len(xs)
         return xs.index(x) if x in xs else n, n + 1
+
+    @classmethod
+    def from_base(cls, keep_features: list[bool] | None = None) -> Self:
+        base = MultiHotBondFeaturizer()
+        return cls(
+            base.bond_types,
+            base.stereo,
+            keep_features,
+        )

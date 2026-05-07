@@ -1,5 +1,3 @@
-from collections.abc import Callable
-
 import numpy as np
 
 from ml_enhance.nn.custom_shap.shap_masks import mask_extra_features, mask_mol_features
@@ -85,25 +83,17 @@ class ShapMaskConfig:
         }
 
 
-type FeatureTransform = Callable[
-    [np.ndarray | None, np.ndarray | None, np.ndarray | None],
-    tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None],
-]
-
-
 def shap_feature_transform(
     mask: np.ndarray,
     mask_config: ShapMaskConfig,
-) -> FeatureTransform:
+    V_f: np.ndarray | None,
+    E_f: np.ndarray | None,
+    x_d: np.ndarray | None,
+) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None]:
     unpacked = mask_config.unpack(mask)
 
-    def transform(
-        V_f: np.ndarray | None, E_f: np.ndarray | None, x_d: np.ndarray | None
-    ) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None]:
-        return (
-            mask_extra_features(V_f, unpacked["keep_extra_atom_groups"]),
-            mask_extra_features(E_f, unpacked["keep_extra_bond_groups"]),
-            mask_mol_features(x_d, unpacked["keep_mol_features"]),
-        )
-
-    return transform
+    return (
+        mask_extra_features(V_f, unpacked["keep_extra_atom_groups"]),
+        mask_extra_features(E_f, unpacked["keep_extra_bond_groups"]),
+        mask_mol_features(x_d, unpacked["keep_mol_features"]),
+    )
