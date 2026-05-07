@@ -284,6 +284,8 @@ def main() -> None:
 
     run_fold(fold_id, data, p_build_datasets)
 
+    # results = parallelize(run_fold, fold_ids, data=data, p_build_datasets=p_build_datasets)
+
     # save results
     # np.save("shap_values.npy", results["shap_values"])
 
