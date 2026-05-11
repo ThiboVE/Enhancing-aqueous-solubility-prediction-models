@@ -20,3 +20,4 @@ tjorven
 atom_features.csv
 bond_features.csv
 mol_features.csv
+version_29_*/*

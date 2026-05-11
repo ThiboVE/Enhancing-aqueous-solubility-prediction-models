@@ -141,7 +141,7 @@ def normalize(df: pd.DataFrame) -> pd.DataFrame:
         "Kappa1",
         "Kappa2",
         "Kappa3",
-        "TPSA",
+        # "TPSA",
         "Phi",
         "NumHAcceptors",
         "RingCount",

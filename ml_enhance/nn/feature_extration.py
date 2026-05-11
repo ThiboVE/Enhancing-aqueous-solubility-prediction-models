@@ -10,7 +10,7 @@ from scipy.constants import (
     Boltzmann,  # in J/K
 )
 
-from ml_enhance import QuantumFPFileLoader, parallelize
+from ml_enhance import QuantumFPFileLoader, RDKitFeatureCalculator, parallelize
 from ml_enhance.nn import atom_features, bond_features, mol_features
 
 
@@ -103,7 +103,7 @@ def extract_atom_features(df: pd.DataFrame, weights: np.ndarray) -> pd.DataFrame
     n_features = len(atom_features)
 
     atom_matrix = values.reshape(n_conformers, n_atoms, n_features)
-    averages = np.einsum("i,ijk->jk", weights, atom_matrix)
+    averages = np.einsum("i,ijk->jk", weights, atom_matrix)  # (n_atoms, n_features)
 
     result = pd.DataFrame(averages, columns=atom_features)
     result.insert(0, "atom_map_idx", unique_atom_idxs)
@@ -130,7 +130,7 @@ def extract_bond_features(df: pd.DataFrame, weights: np.ndarray) -> pd.DataFrame
     n_features = len(bond_features)
 
     bond_matrix = values.reshape(n_conformers, n_bonds, n_features)
-    averages = np.einsum("i,ijk->jk", weights, bond_matrix)
+    averages = np.einsum("i,ijk->jk", weights, bond_matrix)  # (n_bonds, n_features)
 
     result = pd.DataFrame(averages, columns=bond_features)
     result.insert(0, "bond_idx", unique_bond_idxs)
@@ -140,9 +140,12 @@ def extract_bond_features(df: pd.DataFrame, weights: np.ndarray) -> pd.DataFrame
 
 
 def extract_mol_features(df: pd.DataFrame, weights: np.ndarray) -> pd.DataFrame:
+    rdkit_calc = RDKitFeatureCalculator("original_smiles", descriptor_names=["TPSA", "MolLogP", "MolWt"])
+    df = rdkit_calc.add_to_dataframe(df)
+
     arr = df[mol_features].to_numpy()  # (n_conformers, n_features)
 
-    averages = np.einsum("i,ij->j", weights, arr)
+    averages = np.einsum("i,ij->j", weights, arr).reshape(1, -1)  # (, n_features)
 
     result = pd.DataFrame(averages, columns=mol_features)
     result.insert(0, "original_smiles", df["original_smiles"].iloc[0])
