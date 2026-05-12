@@ -2,7 +2,13 @@ from ml_enhance.nn.atom_featurizer import CustomMultiHotAtomFeaturizer
 from ml_enhance.nn.bond_featurizer import CustomMultiHotBondFeaturizer
 from ml_enhance.nn.build_dataset import build_datasets, make_datapoint, make_datapoints
 from ml_enhance.nn.config import Config, atom_features, bond_features, mol_features
-from ml_enhance.nn.custom_shap import ShapMaskConfig, mask_extra_features, mask_mol_features, shap_feature_transform
+from ml_enhance.nn.custom_shap import (
+    ShapMaskConfig,
+    SHAPModelWrapper,
+    mask_extra_features,
+    mask_mol_features,
+    shap_feature_transform,
+)
 from ml_enhance.nn.feature_extration import boltzmann_weights, process_files
 from ml_enhance.nn.features import (
     apply_rbf,
@@ -21,6 +27,7 @@ __all__ = [
     "CustomMultiHotAtomFeaturizer",
     "CustomMultiHotBondFeaturizer",
     "CustomSimpleMoleculeMolGraphFeaturizer",
+    "SHAPModelWrapper",
     "ShapMaskConfig",
     "apply_rbf",
     "atom_features",

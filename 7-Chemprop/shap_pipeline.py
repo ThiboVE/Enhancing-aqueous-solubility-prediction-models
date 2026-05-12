@@ -1,3 +1,5 @@
+import io
+import sys
 from collections.abc import Callable
 from functools import partial
 from typing import Any
@@ -16,10 +18,38 @@ from ml_enhance.nn import (
     CustomMultiHotBondFeaturizer,
     CustomSimpleMoleculeMolGraphFeaturizer,
     ShapMaskConfig,
+    SHAPModelWrapper,
     atom_features,
+    bond_features,
     build_datasets,
+    mol_features,
     shap_feature_transform,
 )
+
+
+def load_model_from_fold(ckpt: dict) -> models.MPNN:
+    """Load a single fold's MPNN by writing its checkpoint to a BytesIO buffer and passing that to MPNN.load_from_file."""
+    buffer = io.BytesIO()
+    torch.save(ckpt, buffer)
+    buffer.seek(0)
+    return models.MPNN.load_from_file(buffer)
+
+
+def get_all_features() -> dict[str, pd.DataFrame | None]:
+    atom_features = pd.read_csv("needed_data/atom_features.csv")
+    atom_features = atom_features if atom_features.size > 0 else None
+
+    bond_features = pd.read_csv("needed_data/bond_features.csv")
+    bond_features = bond_features if bond_features.size > 0 else None
+
+    mol_features = pd.read_csv("needed_data/mol_features.csv")
+    mol_features = mol_features if mol_features.size > 0 else None
+
+    return {
+        "atoms": atom_features,
+        "bonds": bond_features,
+        "mols": mol_features,
+    }
 
 
 def get_predictions(
@@ -54,7 +84,7 @@ def get_predictions(
     E_f = datapoint.E_f
     x_d = datapoint.x_d
 
-    V_f_transformed, E_f_transformed, x_d_transformed = shap_feature_transform(V_f, E_f, x_d)
+    V_f_transformed, E_f_transformed, x_d_transformed = shap_feature_transform(mask, mask_config, V_f, E_f, x_d)
 
     masked_datapoint = MoleculeDatapoint.from_smi(
         smi=smiles,
@@ -93,38 +123,6 @@ def get_predictions(
     return preds[0][0].item()
 
 
-# ── model wrapper for SHAP ────────────────────────────────────────────────────
-
-
-class MoleculeModelWrapper:
-    def __init__(
-        self,
-        datapoint: MoleculeDatapoint,
-        mask_config: ShapMaskConfig,
-        mpnn: models.MPNN,
-        trainer: pl.Trainer,
-    ) -> None:
-        self.datapoint = datapoint
-        self.mask_config = mask_config
-        self.mpnn = mpnn
-        self.trainer = trainer
-
-    def __call__(self, mask_batch: np.ndarray) -> np.ndarray:
-        # mask_batch has shape (n_mask_samples, n_features)
-        return np.array(
-            [
-                get_predictions(
-                    mask=mask_batch[i],
-                    datapoint=self.datapoint,
-                    mask_config=self.mask_config,
-                    mpnn=self.mpnn,
-                    trainer=self.trainer,
-                )
-                for i in range(mask_batch.shape[0])
-            ]
-        )
-
-
 # ── main SHAP loop ────────────────────────────────────────────────────────────
 
 
@@ -137,11 +135,8 @@ def determine_shap(
     feature_choice: np.ndarray,
     max_evals: int,
 ) -> np.ndarray:
-    model_wrapper = MoleculeModelWrapper(
-        datapoint=datapoint,
-        mask_config=mask_config,
-        mpnn=mpnn,
-        trainer=trainer,
+    model_wrapper = SHAPModelWrapper(
+        datapoint=datapoint, mask_config=mask_config, mpnn=mpnn, trainer=trainer, get_predictions=get_predictions
     )
 
     explainer = shap.PermutationExplainer(model_wrapper, masker=binary_masker)
@@ -210,7 +205,7 @@ def run_shap_analysis(
 
     # binary masker: each feature group is independently toggled 0 or 1
     # background is all-ones (all features present)
-    background = np.ones((1, mask_config.total))
+    background = np.zeros((1, mask_config.total))
     binary_masker = shap.maskers.Independent(background, max_samples=100)
 
     # the feature choice vector: all features on (1 = keep, 0 = zero out)
@@ -241,23 +236,27 @@ def run_shap_analysis(
 # ── example usage ─────────────────────────────────────────────────────────────
 
 
-def run_fold(fold_id: int, data: dict[str, Any], p_build_datasets: Callable):
+def run_fold(
+    fold_id: int, data: dict[str, Any], model_folds_data: dict[str, Any], p_build_datasets: Callable, cfg: Config
+):
     split_data = data[f"outer_fold_{fold_id}"]
 
     outer_train_ids = split_data["train_ids"]
     outer_test_ids = split_data["test_ids"]
 
+    model_data = model_folds_data[f"fold_{fold_id}"]
+
     _, outer_test_dset, _ = p_build_datasets(outer_train_ids, outer_test_ids)
 
     # load your trained model checkpoint
-    mpnn = models.MPNN.load_from_file("")
+    mpnn = load_model_from_fold(model_data)
 
     results = run_shap_analysis(
         test_dataset=outer_test_dset,
         mpnn=mpnn,
-        extra_atom_feature_names=atom_features,
-        extra_bond_feature_names=[],
-        mol_feature_names=[],
+        extra_atom_feature_names=atom_features if cfg.use_atom_features else [],
+        extra_bond_feature_names=bond_features if cfg.use_bond_features else [],
+        mol_feature_names=mol_features if cfg.use_mol_features else [],
     )
 
     print("Mean absolute SHAP values per feature group:")
@@ -267,22 +266,26 @@ def run_fold(fold_id: int, data: dict[str, Any], p_build_datasets: Callable):
 
 def main() -> None:
     cfg = Config(
-        use_atom_features=True,
+        use_atom_features=False,
         use_bond_features=False,
         use_mol_features=False,
         use_custom_atom_featurizer=True,
         use_custom_bond_featurizer=False,
     )
 
-    target_df = pd.read_csv("../target_df.csv")
+    fold_id = int(sys.argv[1])
+
+    target_df = pd.read_csv("needed_data/target_df.csv")
 
     all_features: dict[str, pd.DataFrame | None] = get_all_features()
 
-    data = torch.load("../chemprop_splits.pt", weights_only=False)
+    data = torch.load("needed_data/chemprop_splits.pt", weights_only=False)
+
+    model_folds_data = torch.load("../data/chemprop_results/3_chemprop_no_added_rerun_results.pt", weights_only=False)
 
     p_build_datasets = partial(build_datasets, target_df=target_df, all_features=all_features, config=cfg)
 
-    run_fold(fold_id, data, p_build_datasets)
+    run_fold(fold_id, data, model_folds_data, p_build_datasets, cfg)
 
     # results = parallelize(run_fold, fold_ids, data=data, p_build_datasets=p_build_datasets)
 
