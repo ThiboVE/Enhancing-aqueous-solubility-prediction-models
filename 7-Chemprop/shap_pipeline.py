@@ -152,7 +152,7 @@ def run_shap_analysis(
     extra_bond_feature_names: list[str],
     mol_feature_names: list[str],
     n_rbf: int = 10,
-    max_evals: int = 100,
+    max_evals: int = 25,
 ) -> dict[str, Any]:
     """Run SHAP analysis over an entire test dataset.
 

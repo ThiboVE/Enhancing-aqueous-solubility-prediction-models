@@ -62,8 +62,19 @@ class ShapMaskConfig:
     @property
     def feature_names(self) -> list[str]:
         """Human-readable name for each mask bit, for SHAP plots."""
-        default_atom_names = [f"atom_default_{i}" for i in range(self.n_default_atom_groups)]
-        default_bond_names = [f"bond_default_{i}" for i in range(self.n_default_bond_groups)]
+        # default_atom_names = [f"atom_default_{i}" for i in range(self.n_default_atom_groups)]
+        # default_bond_names = [f"bond_default_{i}" for i in range(self.n_default_bond_groups)]
+        default_atom_names = [
+            "atomic_number",
+            "degree",
+            "formal_charge",
+            "chiral_tag",
+            "number_of_hydrogens",
+            "hybridization",
+            "aromaticity",
+            "mass",
+        ]
+        default_bond_names = ["bond_type", "conjugated?", "in_ring?", "stereochemistry"]
         return [
             *default_atom_names,
             *default_bond_names,
