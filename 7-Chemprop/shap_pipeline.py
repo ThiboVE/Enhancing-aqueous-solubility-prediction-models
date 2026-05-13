@@ -239,18 +239,14 @@ def run_shap_analysis(
 
 
 def run_fold(
-    fold_id: int, data: dict[str, Any], model_folds_data: dict[str, Any], p_build_datasets: Callable, cfg: Config
+    fold_id: int, data: dict[str, Any], mpnn: models.MPNN, p_build_datasets: Callable, cfg: Config
 ) -> dict[str, Any]:
     split_data = data[f"outer_fold_{fold_id}"]
 
     outer_train_ids = split_data["train_ids"]
     outer_test_ids = split_data["test_ids"]
 
-    model_data = model_folds_data[f"fold_{fold_id}"]
-
     _, outer_test_dset, _ = p_build_datasets(outer_train_ids, outer_test_ids)
-
-    mpnn = load_model_from_fold(model_data)
 
     results = run_shap_analysis(
         test_dataset=outer_test_dset,
@@ -288,11 +284,11 @@ def main() -> None:
 
     data = torch.load("needed_data/chemprop_splits.pt", weights_only=False)
 
-    model_folds_data = torch.load("../data/chemprop_results/3_chemprop_no_added_rerun_results.pt", weights_only=False)
+    mpnn = models.MPNN.load_from_file(FILES.RESULTS_FILE_MODEL)
 
     p_build_datasets = partial(build_datasets, target_df=target_df, all_features=all_features, config=cfg)
 
-    fold_results = run_fold(fold_id, data, model_folds_data, p_build_datasets, cfg)
+    fold_results = run_fold(fold_id, data, mpnn, p_build_datasets, cfg)
 
     print(fold_results)
 
