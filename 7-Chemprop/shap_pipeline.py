@@ -2,6 +2,7 @@ import io
 import sys
 from collections.abc import Callable
 from functools import partial
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -12,6 +13,7 @@ from chemprop import models
 from chemprop.data import MoleculeDatapoint, MoleculeDataset, build_dataloader
 from lightning import pytorch as pl
 
+from ml_enhance import Files
 from ml_enhance.nn import (
     Config,
     CustomMultiHotAtomFeaturizer,
@@ -116,7 +118,7 @@ def get_predictions(
     )
 
     dataset = MoleculeDataset([masked_datapoint], featurizer=featurizer)
-    loader = build_dataloader(dataset, shuffle=False, batch_size=1)
+    loader = build_dataloader(dataset, shuffle=False, batch_size=1, num_workers=7)
 
     preds = trainer.predict(mpnn, loader)
     # preds is a list of tensors, one per batch
@@ -139,7 +141,7 @@ def determine_shap(
         datapoint=datapoint, mask_config=mask_config, mpnn=mpnn, trainer=trainer, get_predictions=get_predictions
     )
 
-    explainer = shap.PermutationExplainer(model_wrapper, masker=binary_masker)
+    explainer = shap.PermutationExplainer(model_wrapper, masker=binary_masker, seed=42)
     explanation = explainer(feature_choice, max_evals=max_evals)
 
     return explanation.values[0]
@@ -227,8 +229,8 @@ def run_shap_analysis(
     mean_shap = np.mean(np.abs(shap_values), axis=0)
 
     return {
-        "shap_values": shap_values,
-        "mean_shap": mean_shap,
+        "shap_values": shap_values.tolist(),
+        "mean_shap": mean_shap.tolist(),
         "feature_names": mask_config.feature_names,
     }
 
@@ -238,7 +240,7 @@ def run_shap_analysis(
 
 def run_fold(
     fold_id: int, data: dict[str, Any], model_folds_data: dict[str, Any], p_build_datasets: Callable, cfg: Config
-):
+) -> dict[str, Any]:
     split_data = data[f"outer_fold_{fold_id}"]
 
     outer_train_ids = split_data["train_ids"]
@@ -248,7 +250,6 @@ def run_fold(
 
     _, outer_test_dset, _ = p_build_datasets(outer_train_ids, outer_test_ids)
 
-    # load your trained model checkpoint
     mpnn = load_model_from_fold(model_data)
 
     results = run_shap_analysis(
@@ -259,9 +260,11 @@ def run_fold(
         mol_feature_names=mol_features if cfg.use_mol_features else [],
     )
 
-    print("Mean absolute SHAP values per feature group:")
-    for name, val in zip(results["feature_names"], results["mean_shap"], strict=True):
-        print(f"  {name}: {val:.4f}")
+    # print("Mean absolute SHAP values per feature group:")
+    # for name, val in zip(results["feature_names"], results["mean_shap"], strict=True):
+    #     print(f"  {name}: {val:.4f}")
+
+    return results
 
 
 def main() -> None:
@@ -275,6 +278,10 @@ def main() -> None:
 
     fold_id = int(sys.argv[1])
 
+    FILE_NAME: str = Path(__file__).stem + f"_id={fold_id}"
+    FILES = Files(__file__, FILE_NAME)
+    FILES.ensure_dirs()
+
     target_df = pd.read_csv("needed_data/target_df.csv")
 
     all_features: dict[str, pd.DataFrame | None] = get_all_features()
@@ -285,12 +292,12 @@ def main() -> None:
 
     p_build_datasets = partial(build_datasets, target_df=target_df, all_features=all_features, config=cfg)
 
-    run_fold(fold_id, data, model_folds_data, p_build_datasets, cfg)
+    fold_results = run_fold(fold_id, data, model_folds_data, p_build_datasets, cfg)
 
-    # results = parallelize(run_fold, fold_ids, data=data, p_build_datasets=p_build_datasets)
+    print(fold_results)
 
-    # save results
-    # np.save("shap_values.npy", results["shap_values"])
+    # with FILES.SHAP_RESULTS_FILE.open("w") as f:
+    #     json.dump(fold_results, f)
 
 
 if __name__ == "__main__":

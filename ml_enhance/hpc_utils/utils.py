@@ -15,11 +15,11 @@ from sklearn.metrics import mean_squared_error, r2_score
 class Files:
     def __init__(self, running_file: str, filename: str) -> None:
         self.running_file: Path = Path(running_file)
-        self.filename: str = filename
+        self.filename: str = filename + "_rerun"
 
         self.base = self.running_file.parent
 
-        self.output_dir = Path("/data/gent/489/vsc48953/ML_enhance") / self.running_file.stem / "results"
+        self.output_dir = Path("/data/gent/489/vsc48953/ML_enhance") / (self.running_file.stem + "_rerun") / "results"
         self.log_dir = self.base / "logs"
 
     def ensure_dirs(self) -> None:
@@ -31,7 +31,7 @@ class Files:
 
     @property
     def SPLITS_FILE(self) -> Path:
-        return self.base.parent / "splits.pkl"
+        return Path("../splits.pkl")
 
     @property
     def RDKIT_FILE(self) -> Path:
@@ -40,6 +40,10 @@ class Files:
     @property
     def LOG_FILE(self) -> Path:
         return self.log_dir / f"{self.filename}.log"
+
+    @property
+    def LIGHTNING_LOG_DIR(self) -> Path:
+        return self.log_dir / f"{self.filename}_log"
 
     @property
     def RESULTS_FILE(self) -> Path:
@@ -51,11 +55,15 @@ class Files:
 
     @property
     def RESULTS_FILE_MODEL(self) -> Path:
-        return self.output_dir / f"{self.filename}_model.json"
+        return self.output_dir / f"{self.filename}_model.pt"
 
     @property
     def PFI_RESULTS_FILE(self) -> Path:
         return self.output_dir / f"{self.filename}_PFI_results.csv"
+
+    @property
+    def SHAP_RESULTS_FILE(self) -> Path:
+        return self.output_dir / f"{self.filename}_SHAP_results.csv"
 
 
 class CorrelationFilter(BaseEstimator, TransformerMixin):
