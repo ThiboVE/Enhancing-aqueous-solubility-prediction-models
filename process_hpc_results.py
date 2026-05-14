@@ -144,7 +144,7 @@ def process_json_files(json_files: list[Path], output_file: Path) -> None:
 
     json_grouped = group_files(json_files, read_json)
     json_df = pd.DataFrame(json_grouped)
-    json_df.to_csv(output_file, index=False)
+    json_df.to_json(output_file, index=False)
 
 
 def process_pt_files(pt_files: list[Path], output_file: Path) -> None:
