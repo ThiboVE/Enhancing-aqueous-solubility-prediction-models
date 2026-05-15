@@ -2,109 +2,15 @@ import logging
 import pickle
 import sys
 import time
-from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Self
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator
 from sklearn.metrics import mean_squared_error, r2_score
 
-
-class Files:
-    def __init__(self, running_file: str, filename: str) -> None:
-        self.running_file: Path = Path(running_file)
-        self.filename: str = filename + "_rerun"
-
-        self.base = self.running_file.parent
-
-        self.output_dir = Path("/data/gent/489/vsc48953/ML_enhance") / (self.running_file.stem + "_rerun") / "results"
-        self.log_dir = self.base / "logs"
-
-    def ensure_dirs(self) -> None:
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.log_dir.mkdir(parents=True, exist_ok=True)
-
-    def get_df_file(self, df_file_name: str) -> Path:
-        return self.base.parent / df_file_name
-
-    @property
-    def SPLITS_FILE(self) -> Path:
-        return Path("../splits.pkl")
-
-    @property
-    def RDKIT_FILE(self) -> Path:
-        return self.base.parent / "rdkit_feature_names.json"
-
-    @property
-    def LOG_FILE(self) -> Path:
-        return self.log_dir / f"{self.filename}.log"
-
-    @property
-    def LIGHTNING_LOG_DIR(self) -> Path:
-        return self.log_dir / f"{self.filename}_log"
-
-    @property
-    def RESULTS_FILE(self) -> Path:
-        return self.output_dir / f"{self.filename}_results.pkl"
-
-    @property
-    def RESULTS_FILE_JSON(self) -> Path:
-        return self.output_dir / f"{self.filename}_results.json"
-
-    @property
-    def RESULTS_FILE_MODEL(self) -> Path:
-        return self.output_dir / f"{self.filename}_model.pt"
-
-    @property
-    def PFI_RESULTS_FILE(self) -> Path:
-        return self.output_dir / f"{self.filename}_PFI_results.csv"
-
-    @property
-    def SHAP_RESULTS_FILE(self) -> Path:
-        return self.output_dir / f"{self.filename}_SHAP_results.csv"
-
-
-class CorrelationFilter(BaseEstimator, TransformerMixin):
-    """Class that can remove features with a correlation higher than the given threshold value from a pd.DataFrame.
-
-    The class is designed to work in a sklearn.pipeline.Pipeline object.
-    """
-
-    def __init__(self, threshold: float = 1.0) -> None:
-        self.threshold: float = threshold
-        self.to_drop_: list[str] | None = None
-
-    def fit(self, X: pd.DataFrame, y: pd.Series | None = None) -> Self:
-        if isinstance(X, pd.DataFrame):
-            self.feature_names_in_ = np.asarray(X.columns)
-        else:
-            self.feature_names_in_ = np.arange(X.shape[1])
-            X = pd.DataFrame(X)
-
-        corr_matrix = X.corr().abs()
-
-        upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
-
-        self.to_drop_ = np.array([column for column in upper.columns if any(upper[column] >= self.threshold)])
-        self.support_ = np.array([column not in self.to_drop_ for column in upper.columns])
-        return self
-
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        X = pd.DataFrame(X)
-        return X.drop(columns=self.to_drop_, errors="ignore").to_numpy()
-
-    def get_support(self, *, indices: bool = False) -> np.ndarray:
-        """Return boolean mask or indices of kept features."""
-        mask = self.support_
-        return np.where(mask)[0] if indices else mask
-
-    def get_feature_names_out(self, input_features: Iterable[str] | None = None) -> np.ndarray:
-        """This is the magic method that lets the pipeline track names."""
-        if input_features is None:
-            input_features = self.feature_names_in_
-        return np.asarray(input_features)[self.get_support()]
+from ml_enhance.hpc_utils.Files import Files
 
 
 class Score:

@@ -6,8 +6,8 @@ from chemprop.featurizers.molgraph.molecule import SimpleMoleculeMolGraphFeaturi
 from rdkit import Chem
 from rdkit.Chem.rdchem import Bond
 
-from ml_enhance.nn.atom_featurizer import CustomMultiHotAtomFeaturizer
-from ml_enhance.nn.bond_featurizer import CustomMultiHotBondFeaturizer
+from ml_enhance.nn.featurizer.atom_featurizer import CustomMultiHotAtomFeaturizer
+from ml_enhance.nn.featurizer.bond_featurizer import CustomMultiHotBondFeaturizer
 
 
 @dataclass

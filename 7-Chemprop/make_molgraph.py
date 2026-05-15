@@ -1,7 +1,5 @@
-import pickle
-
 import pandas as pd
-from chemprop.data import MoleculeDatapoint, MoleculeDataset
+from chemprop.data import MoleculeDatapoint, MoleculeDataset, build_dataloader
 from chemprop.featurizers import SimpleMoleculeMolGraphFeaturizer
 
 
@@ -17,13 +15,16 @@ def preprocess_to_chemprop_format(
 
 
 def main() -> None:
-    df = pd.read_csv("data/processed_dataset.csv")
+    df = pd.read_csv("needed_data/target_df.csv")
 
     featurizer = SimpleMoleculeMolGraphFeaturizer()
     dataset = preprocess_to_chemprop_format(df, featurizer)
+    loader = build_dataloader(dataset, shuffle=False, batch_size=1, num_workers=0)
 
-    with open("data/chemprop_dataset1.pkl", "wb") as f:
-        pickle.dump(dataset, f)
+    batch = next(iter(loader))
+    bmg, V_d, X_d, *_ = batch
+
+    print(bmg.V[0])
 
 
 if __name__ == "__main__":

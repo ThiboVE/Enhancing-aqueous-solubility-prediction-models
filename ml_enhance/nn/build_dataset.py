@@ -22,7 +22,7 @@ from ml_enhance.nn.features import (
     split_df_by_ids,
     subset_features,
 )
-from ml_enhance.nn.featurizer import get_featurizer
+from ml_enhance.nn.featurizer.featurizer import get_featurizer
 
 type FeatureTransformFn = Callable[
     ...,

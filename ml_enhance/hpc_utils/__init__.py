@@ -1,6 +1,6 @@
+from ml_enhance.hpc_utils.Files import Files
 from ml_enhance.hpc_utils.utils import (
     CorrelationFilter,
-    Files,
     LoggerWriter,
     Score,
     custom_train_test_split,
