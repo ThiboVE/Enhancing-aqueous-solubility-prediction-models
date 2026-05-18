@@ -15,7 +15,6 @@ from ml_enhance.nn.config import (
     mol_features,
 )
 from ml_enhance.nn.features import (
-    apply_rbf,
     build_lookup,
     scale_features,
     scale_target,
@@ -23,6 +22,7 @@ from ml_enhance.nn.features import (
     subset_features,
 )
 from ml_enhance.nn.featurizer.featurizer import get_featurizer
+from ml_enhance.nn.rbf_expansion import apply_rbf
 
 type FeatureTransformFn = Callable[
     ...,
