@@ -1,6 +1,5 @@
 from ml_enhance.hpc_utils.Files import Files
 from ml_enhance.hpc_utils.utils import (
-    CorrelationFilter,
     LoggerWriter,
     Score,
     custom_train_test_split,
@@ -11,7 +10,6 @@ from ml_enhance.hpc_utils.utils import (
 )
 
 __all__ = [
-    "CorrelationFilter",
     "Files",
     "LoggerWriter",
     "Score",
