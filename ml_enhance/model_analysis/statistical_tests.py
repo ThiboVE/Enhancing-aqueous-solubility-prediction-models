@@ -73,7 +73,13 @@ class StatisticalComparison:
 
 
 def compare(
-    combo_df: pd.DataFrame, topo_df: pd.DataFrame, qm_df: pd.DataFrame | None = None, *, n_train: int, n_test: int
+    combo_df: pd.DataFrame,
+    topo_df: pd.DataFrame,
+    qm_df: pd.DataFrame | None = None,
+    *,
+    n_train: int,
+    n_test: int,
+    train_score: bool = True,
 ) -> None:
     dfs = [combo_df, topo_df, qm_df] if qm_df is not None else [combo_df, topo_df]
     assert all("name" in df.columns for df in dfs), "all dataframes should contain 'name' column."
@@ -89,6 +95,8 @@ def compare(
         for df in dfs:
             print(
                 f"{df['name'][0]} mean {metric}: {np.abs(df[f'test_{metric}']).mean()} (Train: {np.abs(df[f'train_{metric}']).mean()})"
+                if train_score
+                else f"{df['name'][0]} mean {metric}: {np.abs(df[f'test_{metric}']).mean()}"
             )
 
         print("Mean improvement:", ttest_result["mean_diff"])

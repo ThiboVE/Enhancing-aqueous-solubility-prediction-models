@@ -18,7 +18,6 @@ from ml_enhance.hpc_utils import (
     save_results,
     setup_logger,
 )
-from ml_enhance.JSONparser import NumpyJSONCache
 from ml_enhance.model_analysis import (
     FeatureImportance,
     StatisticalComparison,
@@ -41,7 +40,6 @@ __all__ = [
     "FeatureImportance",
     "Files",
     "LoggerWriter",
-    "NumpyJSONCache",
     "QFPFeatureEngineer",
     "QuantumFPDatasetBuilder",
     "QuantumFPFileLoader",

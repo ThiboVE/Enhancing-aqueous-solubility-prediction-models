@@ -18,10 +18,13 @@ class RDKitFeatureCalculator:
     Designed to integrate with the QFP pipeline output.
     """
 
-    def __init__(self, smiles_column: str = "smiles") -> None:
+    def __init__(self, smiles_column: str = "smiles", descriptor_names: list[str] | None = None) -> None:
         self.smiles_column = smiles_column
 
-        self.descriptor_names = [name for name, _ in Descriptors._descList]  # noqa: SLF001
+        if descriptor_names is None:
+            descriptor_names = [name for name, _ in Descriptors._descList]  # noqa: SLF001
+
+        self.descriptor_names = descriptor_names
         self.calculator = MoleculeDescriptors.MolecularDescriptorCalculator(self.descriptor_names)
 
     def _compute_descriptor_per_mol(self, smiles: str) -> tuple:

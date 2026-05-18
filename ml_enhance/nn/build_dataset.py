@@ -1,4 +1,7 @@
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+from functools import partial
+from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -12,16 +15,79 @@ from ml_enhance.nn.config import (
     mol_features,
 )
 from ml_enhance.nn.features import (
-    apply_rbf,
     build_lookup,
     scale_features,
     scale_target,
     split_df_by_ids,
     subset_features,
 )
-from ml_enhance.nn.featurizer import get_featurizer
+from ml_enhance.nn.featurizer.featurizer import get_featurizer
+from ml_enhance.nn.rbf_expansion import apply_rbf
+
+type FeatureTransformFn = Callable[
+    ...,
+    tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None],
+]
+
+
+@dataclass
+class FeatureScalers:
+    atom: StandardScaler | None
+    bond: StandardScaler | None
+    mol: StandardScaler | None
+    target: StandardScaler | None
+
 
 # ── datapoint construction ────────────────────────────────────────────────────
+
+
+def _lookup_features(
+    smiles: str,
+    atom_lookup: dict[str, np.ndarray] | None,
+    bond_lookup: dict[str, np.ndarray] | None,
+    mol_lookup: dict[str, np.ndarray] | None,
+) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None]:
+    return (
+        atom_lookup.get(smiles) if atom_lookup else None,
+        bond_lookup.get(smiles) if bond_lookup else None,
+        mol_lookup.get(smiles) if mol_lookup else None,
+    )
+
+
+def make_datapoint(
+    mol_data: NamedTuple,
+    atom_lookup: dict[str, np.ndarray] | None,
+    bond_lookup: dict[str, np.ndarray] | None,
+    mol_lookup: dict[str, np.ndarray] | None,
+    target_col: str = "solubility",
+    *,
+    transform_features: FeatureTransformFn | None = None,
+) -> MoleculeDatapoint:
+    smiles = str(mol_data.smiles)
+
+    y = np.array([getattr(mol_data, target_col)], dtype=float)
+
+    V_f, E_f, x_d = _lookup_features(
+        smiles,
+        atom_lookup,
+        bond_lookup,
+        mol_lookup,
+    )
+
+    V_f_transformed, E_f_transformed, x_d_transformed = (
+        V_f,
+        E_f,
+        x_d if transform_features is None else transform_features(V_f, E_f, x_d),
+    )
+
+    return MoleculeDatapoint.from_smi(
+        smi=smiles,
+        y=y,
+        V_f=V_f_transformed,
+        E_f=E_f_transformed,
+        x_d=x_d_transformed,
+        keep_h=True,
+    )
 
 
 def make_datapoints(
@@ -30,20 +96,19 @@ def make_datapoints(
     bond_lookup: dict[str, np.ndarray] | None,
     mol_lookup: dict[str, np.ndarray] | None,
     target_col: str = "solubility",
+    *,
+    transform_features: FeatureTransformFn | None = None,
 ) -> list[MoleculeDatapoint]:
-    datapoints = []
+    p_make_datapoint = partial(
+        make_datapoint,
+        atom_lookup=atom_lookup,
+        bond_lookup=bond_lookup,
+        mol_lookup=mol_lookup,
+        target_col=target_col,
+        transform_features=transform_features,
+    )
 
-    for row in target_df.itertuples(index=False):
-        smiles = row.smiles
-        y = np.array([getattr(row, target_col)], dtype=float)
-
-        V_f = atom_lookup.get(smiles) if atom_lookup is not None else None
-        E_f = bond_lookup.get(smiles) if bond_lookup is not None else None
-        x_d = mol_lookup.get(smiles) if mol_lookup is not None else None
-
-        datapoints.append(MoleculeDatapoint.from_smi(smi=smiles, y=y, V_f=V_f, E_f=E_f, x_d=x_d, keep_h=True))
-
-    return datapoints
+    return [p_make_datapoint(row) for row in target_df.itertuples(index=False)]
 
 
 # ── dataset construction ────────────────────────────────────────────────────
@@ -56,7 +121,8 @@ def build_datasets(
     all_features: dict[str, pd.DataFrame | None],
     *,
     config: Config,
-) -> tuple[MoleculeDataset, MoleculeDataset, StandardScaler]:
+    datapoints_builder: Callable[..., list[MoleculeDatapoint]] = make_datapoints,
+) -> tuple[MoleculeDataset, MoleculeDataset, FeatureScalers]:
     train_target_df = split_df_by_ids(target_df, train_ids)
     val_target_df = split_df_by_ids(target_df, val_ids)
 
@@ -78,19 +144,23 @@ def build_datasets(
     atom_rbf_cols: list[str] = []
     bond_rbf_cols: list[str] = []
 
+    atom_scaler = None
+    bond_scaler = None
+    mol_scaler = None
+
     if (train_atom_df is not None) and (val_atom_df is not None):
-        train_atom_df, val_atom_df, _ = scale_features(train_atom_df, val_atom_df, atom_features)
+        train_atom_df, val_atom_df, atom_scaler = scale_features(train_atom_df, val_atom_df, atom_features)
         train_atom_df, atom_rbf_cols = apply_rbf(train_atom_df, atom_features, config.n_rbf_centers)
         val_atom_df, _ = apply_rbf(val_atom_df, atom_features, config.n_rbf_centers)
 
     if (train_bond_df is not None) and (val_bond_df is not None):
-        train_bond_df, val_bond_df, _ = scale_features(train_bond_df, val_bond_df, bond_features)
+        train_bond_df, val_bond_df, bond_scaler = scale_features(train_bond_df, val_bond_df, bond_features)
         train_bond_df, bond_rbf_cols = apply_rbf(train_bond_df, bond_features, config.n_rbf_centers)
         val_bond_df, _ = apply_rbf(val_bond_df, bond_features, config.n_rbf_centers)
 
     if (train_mol_df is not None) and (val_mol_df is not None):
+        train_mol_df, val_mol_df, mol_scaler = scale_features(train_mol_df, val_mol_df, mol_features)
         raise NotImplementedError
-        train_mol_df, val_mol_df, _ = scale_features(train_mol_df, val_mol_df, mol_features)
 
     train_target_df, val_target_df, target_scaler = scale_target(train_target_df, val_target_df, config.target_col)
 
@@ -120,7 +190,7 @@ def build_datasets(
         .to_dict()
     )
 
-    train_datapoints = make_datapoints(
+    train_datapoints = datapoints_builder(
         train_target_df,
         train_atom_lookup,
         train_bond_lookup,
@@ -128,7 +198,7 @@ def build_datasets(
         config.target_col,
     )
 
-    val_datapoints = make_datapoints(
+    val_datapoints = datapoints_builder(
         val_target_df,
         val_atom_lookup,
         val_bond_lookup,
@@ -142,8 +212,16 @@ def build_datasets(
         extra_atom_fdim=len(atom_rbf_cols) if train_atom_df is not None else 0,
         extra_bond_fdim=len(bond_rbf_cols) if train_bond_df is not None else 0,
     )
+
+    feature_scaler = FeatureScalers(
+        atom_scaler,
+        bond_scaler,
+        mol_scaler,
+        target_scaler,
+    )
+
     return (
         MoleculeDataset(train_datapoints, featurizer=featurizer),
         MoleculeDataset(val_datapoints, featurizer=featurizer),
-        target_scaler,
+        feature_scaler,
     )

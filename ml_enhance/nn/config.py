@@ -34,5 +34,16 @@ bond_features: list[str] = [
 ]
 
 mol_features: list[str] = [
+    # "homo_lumo_gap",
+    # "ionization_energy",
+    # "electron_affinity",
+    "chemical_potential",
     "molecular_dipole_norm",
-]  # TODO: fill in molecular feature column names
+    "molecular_quadrupole_principal_invariant_2",
+    # "molecular_quadrupole_principal_invariant_3",
+    "molecular_polarizability_mean",
+    "molecular_polarizability_anisotropy",
+    "TPSA",
+    "MolLogP",
+    "MolWt",
+]

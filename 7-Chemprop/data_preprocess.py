@@ -53,8 +53,8 @@ def main() -> None:
 
     config = Config(
         use_atom_features=False,
-        use_bond_features=True,
-        use_mol_features=False,
+        use_bond_features=False,
+        use_mol_features=True,
         use_custom_atom_featurizer=True,
         use_custom_bond_featurizer=False,
     )
@@ -75,8 +75,8 @@ def main() -> None:
     mol_feature_df = all_features["mols"]
 
     # save_df(atom_feature_df, "needed_data/atom_features.csv")
-    save_df(bond_feature_df, "needed_data/bond_features.csv")
-    # save_df(mol_feature_df, "needed_data/mol_features.csv")
+    # save_df(bond_feature_df, "needed_data/bond_features.csv")
+    save_df(mol_feature_df, "needed_data/mol_features.csv")
 
 
 if __name__ == "__main__":
