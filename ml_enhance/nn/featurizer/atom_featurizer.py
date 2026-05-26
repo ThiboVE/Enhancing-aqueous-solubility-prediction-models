@@ -84,3 +84,16 @@ class CustomMultiHotAtomFeaturizer(MultiHotAtomFeaturizer):
         ]
 
         return cls(atomic_nums, degrees, formal_charges, chiral_tags, num_Hs, hybridizations, keep_features)
+
+    @classmethod
+    def from_base(cls, keep_features: list[bool] | None = None) -> Self:
+        base = MultiHotAtomFeaturizer.v2()
+        return cls(
+            base.atomic_nums,
+            base.degrees,
+            base.formal_charges,
+            base.chiral_tags,
+            base.num_Hs,
+            base.hybridizations,
+            keep_features,
+        )
