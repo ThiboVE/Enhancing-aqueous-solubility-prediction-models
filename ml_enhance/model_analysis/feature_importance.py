@@ -105,7 +105,9 @@ class FeatureImportance:
         self.fi_df = df.sort_values("score", ascending=False).head(num_features)
         return self.fi_df
 
-    def plot(self, ax, num_features: int = 10, *, color: str = "tab:blue", title: str | None = None) -> None:
+    def plot(
+        self, ax, num_features: int = 10, *, color: str = "tab:blue", title: str | None = None, shap: bool = False
+    ) -> None:
         """Plot the feature importance on a given axis.
 
         params:
@@ -165,7 +167,8 @@ class FeatureImportance:
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
 
-        ax.set_xlabel("Feature importance", fontsize=18)
+        xlabel = "mean(|SHAP value|)" if shap else "Feature importance"
+        ax.set_xlabel(xlabel, fontsize=18)
         if title is not None:
             ax.set_title(title, fontsize=20)
         # ax.legend(handles=legend_elements, frameon=False, loc="lower right", fontsize=12)
