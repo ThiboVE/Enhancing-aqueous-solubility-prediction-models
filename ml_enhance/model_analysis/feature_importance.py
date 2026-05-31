@@ -136,6 +136,8 @@ class FeatureImportance:
             "conjugated?",
             "aromaticity",
             "mass",
+            "Atomic structure",
+            "Bond structure",
         ]
 
         colors = ["grey" if feature in topology_features else color for feature in df["feature"]]
