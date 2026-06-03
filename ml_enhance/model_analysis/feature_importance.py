@@ -96,13 +96,12 @@ class FeatureImportance:
         return self.fi_df
 
     def get_FI_from_shap(self, num_features: int = 20, *, drop_formal_charge: bool = False) -> pd.DataFrame:
-        df = self.df.groupby("feature")["mean_abs_shap"].agg(["mean", "std"])
+        df = self.df.groupby("feature")["mean_abs_shap"].agg(score="mean", std_score="std")
 
         if drop_formal_charge:
             df = df.drop("formal_charge")
 
-        df = df.reset_index().rename({"mean": "score", "std": "std_score"}, axis=1)
-        self.fi_df = df.sort_values("score", ascending=False).head(num_features)
+        self.fi_df = df.reset_index().sort_values("score", ascending=False).head(num_features)
         return self.fi_df
 
     def plot(
