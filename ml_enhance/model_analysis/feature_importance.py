@@ -22,8 +22,8 @@ class FeatureImportance:
     """
 
     def __init__(self, results_df: pd.DataFrame, *, provided_FI: dict[int, pd.Series] | None = None) -> None:
-        if "estimator" not in results_df.columns:
-            raise ValueError("results_df must contain 'estimator' column")
+        # if "estimator" not in results_df.columns:
+        #     raise ValueError("results_df must contain 'estimator' column")
 
         self.df: pd.DataFrame = results_df
         self.n_outer_folds: int = len(results_df)
@@ -95,7 +95,18 @@ class FeatureImportance:
         self.fi_df = df.sort_values(by="score", ascending=False).reset_index(drop=True)
         return self.fi_df
 
-    def plot(self, ax, num_features: int = 20, *, color: str = "tab:blue", title: str | None = None) -> None:
+    def get_FI_from_shap(self, num_features: int = 20, *, drop_formal_charge: bool = False) -> pd.DataFrame:
+        df = self.df.groupby("feature")["mean_abs_shap"].agg(score="mean", std_score="std")
+
+        if drop_formal_charge:
+            df = df.drop("formal_charge")
+
+        self.fi_df = df.reset_index().sort_values("score", ascending=False).head(num_features)
+        return self.fi_df
+
+    def plot(
+        self, ax, num_features: int = 10, *, color: str = "tab:blue", title: str | None = None, shap: bool = False
+    ) -> None:
         """Plot the feature importance on a given axis.
 
         params:
@@ -111,7 +122,22 @@ class FeatureImportance:
             raise RuntimeError("Feature importance not calculated. Run 'get_feature_importance' first.")
 
         pattern = "|".join(get_topology_features())
-        topology_features = [feature for feature in df["feature"] if re.search(pattern, feature)]
+        topology_features = [feature for feature in df["feature"] if re.search(pattern, feature)] + [
+            "in_ring?",
+            "bond_type",
+            "atomic_number",
+            "degree",
+            "number_of_hydrogens",
+            "chiral_tag",
+            "stereochemistry",
+            "hybridization",
+            "formal_charge",
+            "conjugated?",
+            "aromaticity",
+            "mass",
+            "Atomic structure",
+            "Bond structure",
+        ]
 
         colors = ["grey" if feature in topology_features else color for feature in df["feature"]]
         alphas = [0.6 if feature in topology_features else 1 for feature in df["feature"]]
@@ -142,7 +168,8 @@ class FeatureImportance:
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
 
-        ax.set_xlabel("Feature importance", fontsize=18)
+        xlabel = "mean(|SHAP value|)" if shap else "Feature importance"
+        ax.set_xlabel(xlabel, fontsize=18)
         if title is not None:
             ax.set_title(title, fontsize=20)
         # ax.legend(handles=legend_elements, frameon=False, loc="lower right", fontsize=12)
