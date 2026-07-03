@@ -226,7 +226,7 @@ class QFPFeatureEngineer:
 
     @staticmethod
     def centroid_freq(freqs: np.ndarray[float], intensities: np.ndarray[float], mask: np.ndarray[bool]) -> float:
-        r"""Region centroid frequency for a region: v_k,R = \frac{\\sum_{i \\in R} v_k,i I_k,i}{\\sum_{i \\in R} v_k,i}."""
+        r"""Region centroid frequency for a region: v_k,R = \frac{\\sum_{i \\in R} v_k,i I_k,i}{\\sum_{i \\in R} I_k,i}."""
         return np.dot(freqs[mask], intensities[mask]) / intensities[mask].sum()
 
     @staticmethod

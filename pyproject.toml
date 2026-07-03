@@ -24,6 +24,7 @@ dependencies = [
     "ipywidgets>=8.1.8",
     "shap>=0.51.0",
     "brokenaxes>=0.6.2",
+    "torch-geometric>=2.7.0",
 ]
 
 [project.optional-dependencies]

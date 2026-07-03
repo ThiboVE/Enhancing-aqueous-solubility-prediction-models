@@ -10,6 +10,7 @@ import json
 import re
 from _collections_abc import Generator
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -95,8 +96,7 @@ class QuantumFPFileLoader:
         return [path for path in self.data_directory.iterdir() if path.suffix == extension]
 
     def stream_conformer_dataframe(
-        self,
-        file: Path,
+        self, file: Path, *, include_coords: bool = False
     ) -> Generator[pd.DataFrame, None, None]:
         """Load a single file, convert it to a conformer-level DataFrame.
 
@@ -105,45 +105,27 @@ class QuantumFPFileLoader:
         with gzip.open(file, "rt") as f:
             data: list[dict] = json.load(f)
 
-        df = self._build_conformer_dataframe(data)
+        df = self._build_conformer_dataframe(data, include_coords=include_coords)
 
         yield df
 
-    # def _build_conformer_dataframe(
-    #     self,
-    #     data: list[dict],
-    # ) -> pd.DataFrame:
-    #     """Convert raw QuantumFP conformer JSON data into a conformer-level DataFrame."""
-    #     rows: list[dict] = []
+    def get_coordinates(self, file: Path) -> pd.DataFrame:
+        """Load a single file and return a pd.DataFrame containing the output SMILES and coordinates of each conformer."""
+        with gzip.open(file, "rt") as f:
+            data: list[dict[str, Any]] = json.load(f)
 
-    #     for conformer in data:
-    #         qm_features: dict[str, float] = {}
+        output_smiles = [conformer["output_smiles"] for conformer in data]
+        coords = [conformer["xyz"] for conformer in data]
 
-    #         # Attach metadata
-    #         qm_features["id"] = conformer["id"]
-    #         qm_features["original_smiles"] = conformer["original_smiles"]
-    #         qm_features["output_smiles"] = conformer["output_smiles"]
+        return pd.DataFrame({"output_smiles": output_smiles, "coords": coords})
 
-    #         for key, value in conformer.items():
-    #             if self._PROP_PATTERN.search(key):
-    #                 prop_id = int(key.rsplit("_", 1)[-1])
-
-    #                 feature_name = self.property_dict.get(prop_id)
-
-    #                 if feature_name is not None:
-    #                     qm_features[feature_name] = value
-
-    #         rows.append(qm_features)
-
-    #     return pd.DataFrame(rows).convert_dtypes()
-
-    def _build_conformer_dataframe(self, data: list[dict]) -> pd.DataFrame:
+    def _build_conformer_dataframe(self, data: list[dict[str, Any]], *, include_coords: bool = False) -> pd.DataFrame:
         """Convert raw QuantumFP conformer JSON data into a conformer-level DataFrame."""
         df = pd.json_normalize(data)
 
         prop_cols = [col for col in df.columns if self._PROP_PATTERN.search(col)]
 
-        mapping = {}
+        mapping: dict[str, str] = {}
         for col in prop_cols:
             prop_id = int(col.rsplit("_", 1)[-1])
             feature_name = self.property_dict.get(prop_id)
@@ -153,6 +135,10 @@ class QuantumFPFileLoader:
         df = df.rename(columns=mapping)
 
         keep_cols = ["id", "original_smiles", "output_smiles", *list(mapping.values())]
+
+        if include_coords:
+            keep_cols.append("xyz")
+
         df = df[keep_cols]
 
         return df.convert_dtypes()

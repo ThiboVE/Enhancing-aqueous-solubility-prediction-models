@@ -28,6 +28,7 @@ for ((i=0; i<TOTAL; i+=BATCH_SIZE)); do
 
 done
 
+# ----------------------------------------------------
 
 function get_result_url() {
     curl -s -H "x-api-key: ${APIKEY}" -X POST -d "$1" "$URL"/get_result_url
