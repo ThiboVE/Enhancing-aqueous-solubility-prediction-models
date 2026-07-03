@@ -7,8 +7,6 @@ from lightning import pytorch as pl
 
 from ml_enhance.nn.custom_shap.shap_config import ShapMaskConfig
 
-# ── model wrapper for SHAP ────────────────────────────────────────────────────
-
 type PredictionFn = Callable[[np.ndarray, MoleculeDatapoint, ShapMaskConfig, MPNN, pl.Trainer], float]
 
 

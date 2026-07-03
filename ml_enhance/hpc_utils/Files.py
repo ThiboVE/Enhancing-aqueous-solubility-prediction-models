@@ -52,4 +52,4 @@ class Files:
 
     @property
     def SHAP_RESULTS_FILE(self) -> Path:
-        return self.output_dir / f"{self.filename}_SHAP_results.csv"
+        return self.output_dir / f"{self.filename}_SHAP_results.json"
